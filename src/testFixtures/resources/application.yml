@@ -1,0 +1,30 @@
+spring:
+  application:
+    name: jwt-security
+  shell:
+    interactive:
+      enabled: true
+
+logging:
+  level:
+    org:
+      springframework:
+        security: DEBUG
+
+# JWT Configuration
+jwt:
+  issuer: local
+  expiration: 3600
+  private_key: src/testFixtures/resources/jwt/private.pem
+  public_keys:
+    local: src/testFixtures/resources/jwt/public.pem
+  authorizationHeaderOptions:
+    enabled: true
+    name: Authorization
+    prefix: Bearer
+  queryParameterOptions:
+    enabled: true
+    name: bearer
+
+
+
