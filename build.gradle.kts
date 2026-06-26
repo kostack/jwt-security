@@ -168,7 +168,7 @@ mavenPublishing {
   )
 
   pom {
-    name.set("Fixtures")
+    name.set("JWT Security")
     description.set(project.description)
     url.set("https://github.com/kostack/jwt-security")
 
