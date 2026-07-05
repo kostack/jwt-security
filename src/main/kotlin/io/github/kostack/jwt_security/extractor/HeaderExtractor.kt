@@ -2,9 +2,7 @@ package io.github.kostack.jwt_security.extractor
 
 import io.github.kostack.jwt_security.configuration.JwtProperties
 import org.springframework.http.server.reactive.ServerHttpRequest
-import org.springframework.stereotype.Component
 
-@Component
 class HeaderExtractor(
   private val jwtProperties: JwtProperties
 ) : TokenExtractor {

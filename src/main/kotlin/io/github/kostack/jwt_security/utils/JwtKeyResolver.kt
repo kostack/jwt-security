@@ -3,12 +3,10 @@ package io.github.kostack.jwt_security.utils
 import io.github.kostack.jwt_security.configuration.JwtProperties
 import jakarta.annotation.PostConstruct
 import org.slf4j.LoggerFactory
-import org.springframework.stereotype.Component
 import java.nio.file.Path
 import java.security.PrivateKey
 import java.security.PublicKey
 
-@Component
 class JwtKeyResolver(
   private val jwtProperties: JwtProperties
 ) {

@@ -22,6 +22,10 @@ dependencies {
 
 ## Quick Start
 
+The library auto-configures its JWT properties, key resolver, manager, token extractors,
+authentication converter, authentication manager, unauthorized entry point, and Spring Shell command.
+You still define your own `SecurityWebFilterChain` so each application can choose its public and protected routes.
+
 ### 1. Generate RSA Key Pair
 
 ```bash

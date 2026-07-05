@@ -4,6 +4,7 @@ import com.github.freva.asciitable.AsciiTable
 import io.github.kostack.jwt_security.service.JwtManager
 import io.github.kostack.jwt_security.service.JwtUserService
 import kotlinx.coroutines.runBlocking
+import org.springframework.beans.factory.ObjectProvider
 import org.springframework.shell.command.annotation.Option
 import org.springframework.shell.standard.ShellComponent
 import org.springframework.shell.standard.ShellMethod
@@ -11,7 +12,7 @@ import org.springframework.shell.standard.ShellMethod
 @ShellComponent
 class GenerateToken(
   private val jwtManager: JwtManager,
-  private val userService: JwtUserService
+  private val userService: ObjectProvider<JwtUserService>
 ) {
   @ShellMethod(
     key = ["security:generate-token"],
@@ -21,7 +22,13 @@ class GenerateToken(
     @Option(longNames = ["identity"], shortNames = ['u'], required = true)
     identity: String
   ) = runBlocking {
-    val user = userService.findByIdentity(identity)
+    val jwtUserService = userService.getIfAvailable()
+    if (jwtUserService == null) {
+      println("JwtUserService bean not found")
+      return@runBlocking
+    }
+
+    val user = jwtUserService.findByIdentity(identity)
     if (user == null) {
       println("User not found: $identity")
       return@runBlocking

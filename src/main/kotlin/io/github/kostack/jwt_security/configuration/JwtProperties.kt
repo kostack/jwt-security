@@ -3,9 +3,7 @@ package io.github.kostack.jwt_security.configuration
 import io.jsonwebtoken.Jwts
 import io.jsonwebtoken.security.SignatureAlgorithm
 import org.springframework.boot.context.properties.ConfigurationProperties
-import org.springframework.context.annotation.Configuration
 
-@Configuration
 @ConfigurationProperties(prefix = "jwt")
 data class JwtProperties(
   var issuer: String = "",

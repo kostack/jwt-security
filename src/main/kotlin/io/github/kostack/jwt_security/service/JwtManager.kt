@@ -7,11 +7,9 @@ import io.jsonwebtoken.Claims
 import io.jsonwebtoken.Jws
 import io.jsonwebtoken.Jwts
 import org.slf4j.LoggerFactory
-import org.springframework.stereotype.Service
 import java.time.Instant
 import java.util.Date
 
-@Service
 class JwtManager(
   private val jwtProperties: JwtProperties,
   private val jwtKeyResolver: JwtKeyResolver,
