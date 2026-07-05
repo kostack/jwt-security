@@ -1,6 +1,6 @@
 package io.github.kostack.jwt_security.utils
 
-import io.github.kostack.jwt_security.configuration.JwtProperties
+import io.github.kostack.jwt_security.autoconfigure.JwtProperties
 import jakarta.annotation.PostConstruct
 import org.slf4j.LoggerFactory
 import java.nio.file.Path

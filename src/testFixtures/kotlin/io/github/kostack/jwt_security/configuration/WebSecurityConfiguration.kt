@@ -3,6 +3,8 @@ package io.github.kostack.jwt_security.configuration
 import io.github.kostack.jwt_security.authentication.AuthEntryPointJwt
 import io.github.kostack.jwt_security.authentication.JwtServerAuthenticationConverter
 import io.github.kostack.jwt_security.authentication.TokenAuthenticationManager
+import io.github.kostack.jwt_security.autoconfigure.JwtSecurityAutoConfiguration
+import org.springframework.boot.autoconfigure.ImportAutoConfiguration
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.security.config.annotation.method.configuration.EnableReactiveMethodSecurity
@@ -16,6 +18,7 @@ import org.springframework.security.web.server.context.NoOpServerSecurityContext
 @Configuration
 @EnableWebFluxSecurity
 @EnableReactiveMethodSecurity
+@ImportAutoConfiguration(JwtSecurityAutoConfiguration::class)
 class WebSecurityConfiguration(
   private val tokenAuthenticationManager: TokenAuthenticationManager,
   private val jwtAuthenticationConverter: JwtServerAuthenticationConverter,

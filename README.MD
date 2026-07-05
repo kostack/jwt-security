@@ -184,26 +184,6 @@ Token: eyJhbGciOiJSUzUxMiJ9...
 +----------+------------------------------+
 ```
 
-## Token Validation
-
-```kotlin
-@Service
-class TokenService(private val jwtManager: JwtManager) {
-
-    fun isValid(token: String): Boolean =
-        jwtManager.validateJwtToken(token)
-
-    fun getSubject(token: String): String =
-        jwtManager.getClaims(token).payload.subject
-
-    fun getRoles(token: String): List<String> {
-        val claims = jwtManager.getClaims(token).payload
-        @Suppress("UNCHECKED_CAST")
-        return claims["roles"] as? List<String> ?: emptyList()
-    }
-}
-```
-
 ## Multi-Issuer Support
 
 To accept tokens from multiple services, register their public keys:

@@ -1,6 +1,6 @@
 package io.github.kostack.jwt_security.service
 
-import io.github.kostack.jwt_security.configuration.JwtProperties
+import io.github.kostack.jwt_security.autoconfigure.JwtProperties
 import io.github.kostack.jwt_security.utils.IssuerKeyLocator
 import io.github.kostack.jwt_security.utils.JwtKeyResolver
 import io.jsonwebtoken.Claims

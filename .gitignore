@@ -1,5 +1,7 @@
 HELP.md
 .gradle
+.codex
+.agents
 gradle.properties
 build/
 !gradle/wrapper/gradle-wrapper.jar

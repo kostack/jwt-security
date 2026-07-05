@@ -1,4 +1,4 @@
-package io.github.kostack.jwt_security.configuration
+package io.github.kostack.jwt_security.autoconfigure
 
 import io.jsonwebtoken.Jwts
 import io.jsonwebtoken.security.SignatureAlgorithm

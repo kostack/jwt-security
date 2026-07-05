@@ -4,7 +4,6 @@ import io.github.kostack.jwt_security.authentication.AuthEntryPointJwt
 import io.github.kostack.jwt_security.authentication.JwtServerAuthenticationConverter
 import io.github.kostack.jwt_security.authentication.TokenAuthenticationManager
 import io.github.kostack.jwt_security.command.GenerateToken
-import io.github.kostack.jwt_security.configuration.JwtProperties
 import io.github.kostack.jwt_security.extractor.HeaderExtractor
 import io.github.kostack.jwt_security.extractor.QueryParameterExtractor
 import io.github.kostack.jwt_security.service.JwtManager

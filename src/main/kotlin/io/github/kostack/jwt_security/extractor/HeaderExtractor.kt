@@ -1,6 +1,6 @@
 package io.github.kostack.jwt_security.extractor
 
-import io.github.kostack.jwt_security.configuration.JwtProperties
+import io.github.kostack.jwt_security.autoconfigure.JwtProperties
 import org.springframework.http.server.reactive.ServerHttpRequest
 
 class HeaderExtractor(

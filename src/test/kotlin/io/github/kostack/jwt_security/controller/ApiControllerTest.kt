@@ -1,7 +1,7 @@
 package io.github.kostack.jwt_security.controller
 
 import io.github.kostack.jwt_security.TestApplication
-import io.github.kostack.jwt_security.configuration.JwtProperties
+import io.github.kostack.jwt_security.autoconfigure.JwtProperties
 import io.github.kostack.jwt_security.service.JwtManager
 import io.github.kostack.jwt_security.service.UserService
 import kotlinx.coroutines.test.runTest
