@@ -17,6 +17,8 @@ group = "io.github.kostack"
 version = providers.gradleProperty("projectVersion").getOrElse("1.0.0")
 description = "JWT Security"
 
+val springShellVersion = "3.4.0"
+
 java {
   toolchain {
     languageVersion = JavaLanguageVersion.of(23)
@@ -39,9 +41,10 @@ dependencies {
   implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactor")
   implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
 
-  implementation("org.springframework.boot:spring-boot-starter-webflux")
-  implementation("org.springframework.boot:spring-boot-configuration-processor")
-  implementation("org.springframework.boot:spring-boot-starter-security")
+  // Webflux
+  api("org.springframework.boot:spring-boot-starter-webflux")
+  api("org.springframework.boot:spring-boot-starter-security")
+
   implementation("com.github.freva:ascii-table:1.12.1")
 
   // JWT related
@@ -49,18 +52,18 @@ dependencies {
   runtimeOnly("io.jsonwebtoken:jjwt-impl:0.13.0")
   runtimeOnly("io.jsonwebtoken:jjwt-jackson:0.13.0")
 
-  compileOnly("org.springframework.shell:spring-shell-starter:3.4.0")
-  runtimeOnly("org.springframework.shell:spring-shell-starter:3.4.0")
-  testImplementation("org.springframework.shell:spring-shell-starter:3.4.0")
+  // Shell
+  implementation("org.springframework.shell:spring-shell-starter:$springShellVersion")
+  testImplementation("org.springframework.shell:spring-shell-starter:$springShellVersion")
 
   testImplementation("org.springframework.boot:spring-boot-starter-test")
   testRuntimeOnly("org.junit.platform:junit-platform-launcher")
   testImplementation("com.ninja-squad:springmockk:5.0.1")
   testImplementation("io.mockk:mockk:1.14.11")
   testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test")
-  testFixturesImplementation(kotlin("stdlib"))
   testImplementation(kotlin("test"))
 
+  testFixturesImplementation(kotlin("stdlib"))
   testFixturesImplementation("org.springframework.boot:spring-boot-starter-webflux")
   testFixturesImplementation("org.springframework.boot:spring-boot-autoconfigure")
   testFixturesImplementation("org.springframework.boot:spring-boot-starter-security")
@@ -83,7 +86,11 @@ val installGitHook =
     description = "Installs a git pre-commit hook to enforce formatting rules"
     doLast {
       val hookSource = file("scripts/pre-commit")
-      val hookTarget = file(".git/hooks/pre-commit")
+      val hooksDir = file(".git/hooks")
+      val hookTarget = hooksDir.resolve("pre-commit")
+      check(hookSource.isFile) { "Git hook source not found: ${hookSource.path}" }
+      check(hooksDir.isDirectory) { "Git hooks directory not found: ${hooksDir.path}" }
+
       if (!hookTarget.exists()) {
         hookSource.copyTo(hookTarget, overwrite = false)
       }
@@ -91,15 +98,11 @@ val installGitHook =
     }
   }
 
-tasks.named("assemble") {
-  dependsOn(installGitHook)
-}
-
 tasks.named<Test>("test") {
   useJUnitPlatform()
-  dependsOn(installGitHook)
 
   finalizedBy(tasks.named("jacocoTestReport"))
+  finalizedBy(tasks.named("jacocoTestCoverageVerification"))
   reports.junitXml.required.set(true)
 
   testLogging {
@@ -123,6 +126,8 @@ tasks.named<JacocoReport>("jacocoTestReport") {
 }
 
 tasks.named<JacocoCoverageVerification>("jacocoTestCoverageVerification") {
+  dependsOn(tasks.named("test"))
+
   violationRules {
     rule {
       limit {
