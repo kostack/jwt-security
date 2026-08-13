@@ -22,7 +22,7 @@ class JwtKeyResolver(
           Path.of(jwtProperties.privateKey).toString()
         )
     }.onFailure {
-      log.warn("Failed to initialize private JWT key: ${it.stackTraceToString()}")
+      log.debug("Failed to initialize private JWT key: ${it.stackTraceToString()}")
     }
 
     runCatching {
