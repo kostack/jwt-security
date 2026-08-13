@@ -1,5 +1,6 @@
 HELP.md
 .gradle
+.gradle-local
 .codex
 .agents
 gradle.properties
