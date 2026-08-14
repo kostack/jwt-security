@@ -39,12 +39,12 @@ class PayloadExtensionsTest {
   fun `getClaimOrNull returns claim with requested type`() {
     val claims = mapOf<String, Any>("roles" to listOf("admin", "user"))
 
-    assertEquals(listOf("admin", "user"), getClaimOrNull<List<String>>(claims, "roles"))
+    assertEquals(listOf("admin", "user"), claims.getClaimOrNull<List<String>>("roles"))
   }
 
   @Test
   fun `getClaimOrNull returns null when claim is missing`() {
-    assertNull(getClaimOrNull<String>(emptyMap(), "subject"))
+    assertNull(emptyMap<String, Any>().getClaimOrNull<String>("subject"))
   }
 
   @Test
@@ -53,7 +53,7 @@ class PayloadExtensionsTest {
 
     val exception =
       assertFailsWith<IllegalArgumentException> {
-        getClaimOrNull<String>(claims, "active")
+        claims.getClaimOrNull<String>("active")
       }
 
     assertEquals("active claim expected String but was Boolean", exception.message)
