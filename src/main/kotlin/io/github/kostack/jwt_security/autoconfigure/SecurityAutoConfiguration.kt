@@ -30,15 +30,15 @@ class SecurityAutoConfiguration {
   fun clock(): Clock = Clock.systemUTC()
 
   @Bean
-  @ConditionalOnMissingBean(AuthEntryPointJwt::class)
+  @ConditionalOnMissingBean
   fun authEntryPointJwt(): AuthEntryPointJwt = AuthEntryPointJwt()
 
   @Bean
-  @ConditionalOnMissingBean(JwtKeyResolver::class)
+  @ConditionalOnMissingBean
   fun jwtKeyResolver(properties: SecurityProperties): JwtKeyResolver = JwtKeyResolver(properties)
 
   @Bean
-  @ConditionalOnMissingBean(JwtEncoder::class)
+  @ConditionalOnMissingBean
   fun jwtEncoder(
     keyResolver: JwtKeyResolver,
     properties: SecurityProperties,
@@ -47,29 +47,29 @@ class SecurityAutoConfiguration {
   ): JwtEncoder = JwtEncoderImpl(keyResolver, properties, clock, claimsValidator)
 
   @Bean
-  @ConditionalOnMissingBean(HeaderOrQueryTokenAuthenticationConverter::class)
+  @ConditionalOnMissingBean
   fun headerOrQueryTokenAuthenticationConverter(
     properties: SecurityProperties
   ): HeaderOrQueryTokenAuthenticationConverter = HeaderOrQueryTokenAuthenticationConverter(properties)
 
   @Bean
-  @ConditionalOnMissingBean(JwtClaimsValidator::class)
+  @ConditionalOnMissingBean
   fun jwtClaimsValidator(properties: SecurityProperties): JwtClaimsValidator = RequiredJwtClaimsValidator(properties)
 
   @Bean
-  @ConditionalOnMissingBean(JwtAuthenticationTokenFactory::class)
+  @ConditionalOnMissingBean
   fun jwtAuthenticationTokenFactory(userProvider: UserProvider): JwtAuthenticationTokenFactory =
     JwtUserAuthenticationTokenFactory(userProvider)
 
   @Bean
-  @ConditionalOnMissingBean(JwtAuthenticationConverter::class)
+  @ConditionalOnMissingBean
   fun jwtAuthenticationConverter(
     tokenFactory: JwtAuthenticationTokenFactory,
     delegate: ReactiveJwtAuthenticationConverter
   ): JwtAuthenticationConverter = JwtAuthenticationConverter(tokenFactory, delegate)
 
   @Bean
-  @ConditionalOnMissingBean(ReactiveJwtAuthenticationConverter::class)
+  @ConditionalOnMissingBean
   fun reactiveJwtAuthenticationConverter(properties: SecurityProperties): ReactiveJwtAuthenticationConverter {
     val authorities =
       JwtGrantedAuthoritiesConverter().apply {
@@ -84,11 +84,11 @@ class SecurityAutoConfiguration {
   }
 
   @Bean
-  @ConditionalOnMissingBean(ReactiveJwtDecoder::class)
+  @ConditionalOnMissingBean
   fun jwtDecoder(encoder: JwtEncoder): ReactiveJwtDecoder = encoder.decoder()
 
   @Bean
-  @ConditionalOnMissingBean(UserProvider::class)
+  @ConditionalOnMissingBean
   fun userProvider(): UserProvider =
     object : UserProvider {
       override suspend fun load(
