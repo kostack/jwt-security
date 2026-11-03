@@ -41,6 +41,7 @@ class AuthEntryPointJwt : ServerAuthenticationEntryPoint {
       response.writeWith(Mono.just(buffer))
     } catch (e: Exception) {
       log.error("Error writing JSON response: {}", e.message)
+      response.headers.contentType = MediaType("text", "plain", StandardCharsets.UTF_8)
       val fallback =
         response
           .bufferFactory()
