@@ -21,7 +21,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: 23
+          java-version: 25
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -30,7 +30,7 @@ jobs:
         run: ./gradlew dependencies --no-daemon
 
       - name: Run tests
-        run: ./gradlew clean test --no-daemon --stacktrace
+        run: ./gradlew clean check --no-daemon --stacktrace
 
   publish:
     needs: test
@@ -44,7 +44,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: 23
+          java-version: 25
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
