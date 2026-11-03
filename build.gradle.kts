@@ -3,6 +3,7 @@ import org.gradle.testing.jacoco.tasks.JacocoReport
 
 plugins {
   kotlin("jvm") version "2.3.0"
+  kotlin("kapt") version "2.3.0"
   kotlin("plugin.spring") version "2.3.0"
   kotlin("plugin.serialization") version "2.3.0"
   id("org.springframework.boot") version "4.1.0"
@@ -36,6 +37,8 @@ dependencyManagement {
 }
 
 dependencies {
+  kapt("org.springframework.boot:spring-boot-configuration-processor")
+
   // Kotlin
   implementation(kotlin("reflect"))
   implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core")
