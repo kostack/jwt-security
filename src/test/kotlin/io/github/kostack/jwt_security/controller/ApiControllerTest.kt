@@ -1,85 +1,82 @@
 package io.github.kostack.jwt_security.controller
 
 import io.github.kostack.jwt_security.TestApplication
-import io.github.kostack.jwt_security.service.JwtManager
-import io.github.kostack.jwt_security.service.UserProviderImpl
-import kotlinx.coroutines.test.runTest
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.MethodOrderer
-import org.junit.jupiter.api.Order
+import io.github.kostack.jwt_security.TestJwtKeys
+import io.github.kostack.jwt_security.encoder.JwtEncoder
+import io.github.kostack.jwt_security.model.User
+import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.TestInstance
-import org.junit.jupiter.api.TestMethodOrder
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.web.server.LocalServerPort
-import org.springframework.http.MediaType
+import org.springframework.test.context.DynamicPropertyRegistry
+import org.springframework.test.context.DynamicPropertySource
 import org.springframework.test.web.reactive.server.WebTestClient
-import org.springframework.test.web.reactive.server.expectBody
 
 @SpringBootTest(
   classes = [TestApplication::class],
-  webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT
+  webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+  properties = [
+    "spring.shell.interactive.enabled=false",
+    "spring.shell.noninteractive.enabled=false",
+    "spring.shell.script.enabled=false"
+  ]
 )
-@TestInstance(TestInstance.Lifecycle.PER_CLASS)
-@TestMethodOrder(MethodOrderer.OrderAnnotation::class)
 class ApiControllerTest {
-  @Autowired lateinit var jwtProperties: JwtProperties
-
-  @Autowired lateinit var jwtManager: JwtManager
-
-  @Autowired lateinit var userService: UserProviderImpl
+  @Autowired lateinit var jwtEncoder: JwtEncoder
 
   @LocalServerPort
-  protected var port: Int = 0
+  private var port: Int = 0
 
-  fun webTestClient(): WebTestClient = WebTestClient.bindToServer().baseUrl("http://localhost:$port").build()
+  private fun client(): WebTestClient = WebTestClient.bindToServer().baseUrl("http://localhost:$port").build()
 
-  @Test
-  @Order(1)
-  fun `should return default message`() =
-    runTest {
-      val token = jwtManager.generateToken(userService.findByIdentity("admin-1"))
-
-      webTestClient()
-        .get()
-        .uri { uriBuilder ->
-          uriBuilder
-            .path("/api")
-            .queryParam("testId", "ok")
-            .build()
-        }.header("Authorization", "Bearer $token")
-        .accept(MediaType.APPLICATION_JSON)
-        .exchange()
-        .expectStatus()
-        .isOk
-        .expectBody<String>()
-        .value { response ->
-          assertEquals(
-            "security",
-            response
-          )
-        }
+  private fun token(): String =
+    runBlocking {
+      jwtEncoder.encode(User("admin", listOf("ROLE_ADMIN")))
     }
 
   @Test
-  @Order(2)
-  fun `should return 401`() =
-    runTest {
-      val token = "invalid token"
+  fun `generated keys sign and verify query tokens`() {
+    client()
+      .get()
+      .uri { it.path("/api").queryParam("token", token()).build() }
+      .exchange()
+      .expectStatus()
+      .isOk
+      .expectBody()
+      .jsonPath("$.username")
+      .isEqualTo("admin")
+  }
 
-      webTestClient()
-        .get()
-        .uri { uriBuilder ->
-          uriBuilder
-            .path("/api")
-            .queryParam("testId", "ok")
-            .build()
-        }.header("Authorization", "Bearer $token")
-        .accept(MediaType.APPLICATION_JSON)
-        .exchange()
-        .expectStatus()
-        .isUnauthorized
-        .expectBody()
+  @Test
+  fun `generated keys sign and verify header tokens`() {
+    client()
+      .get()
+      .uri("/api")
+      .header("x-auth", token())
+      .exchange()
+      .expectStatus()
+      .isOk
+      .expectBody()
+      .jsonPath("$.username")
+      .isEqualTo("admin")
+  }
+
+  @Test
+  fun `invalid token is unauthorized`() {
+    client()
+      .get()
+      .uri("/api?token=invalid")
+      .exchange()
+      .expectStatus()
+      .isUnauthorized
+  }
+
+  companion object {
+    @JvmStatic
+    @DynamicPropertySource
+    fun jwtKeys(registry: DynamicPropertyRegistry) {
+      TestJwtKeys.properties.forEach { (name, value) -> registry.add(name) { value } }
     }
+  }
 }

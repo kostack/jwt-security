@@ -70,6 +70,8 @@ dependencies {
   testImplementation(kotlin("test"))
 
   testFixturesImplementation(kotlin("stdlib"))
+  testFixturesImplementation("org.springframework.shell:spring-shell-autoconfigure:$springShellVersion")
+  testFixturesImplementation("org.jline:jline-terminal:3.26.3")
   testFixturesImplementation("org.springframework.boot:spring-boot-starter-webflux")
   testFixturesImplementation("org.springframework.boot:spring-boot-autoconfigure")
   testFixturesImplementation("org.springframework.boot:spring-boot-starter-security")
@@ -115,7 +117,7 @@ tasks.named<Test>("test") {
     events("passed", "skipped", "failed")
     showStandardStreams = true
   }
-  jvmArgs("-XX:+EnableDynamicAgentLoading")
+  jvmArgs("-XX:+EnableDynamicAgentLoading", "-Xshare:off")
 }
 
 tasks.named<JacocoReport>("jacocoTestReport") {
