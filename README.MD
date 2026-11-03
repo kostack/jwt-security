@@ -12,13 +12,21 @@ A Kotlin/Spring Boot WebFlux library for reactive JWT authentication using RSA k
 
 ## Installation
 
-Add the dependency to your `build.gradle.kts`:
+Add the library and Spring Boot starters to your application's `build.gradle.kts`:
 
 ```kotlin
 dependencies {
     implementation("io.github.kostack:jwt-security:<version>")
+    implementation("org.springframework.boot:spring-boot-starter-webflux")
+    implementation("org.springframework.boot:spring-boot-starter-security")
+    implementation("org.springframework.boot:spring-boot-starter-security-oauth2-resource-server")
+    implementation("org.springframework.boot:spring-boot-starter-oauth2-client")
 }
 ```
+
+These four starters are compile-only dependencies of the library; consuming applications
+must declare them explicitly. Use your application's Spring Boot dependency management
+to select their versions. This project builds and tests against Spring Boot 4.1.0 and Java 25.
 
 ## Quick Start
 

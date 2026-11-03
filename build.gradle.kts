@@ -22,7 +22,7 @@ val springShellVersion = "3.4.0"
 
 java {
   toolchain {
-    languageVersion = JavaLanguageVersion.of(23)
+    languageVersion = JavaLanguageVersion.of(25)
   }
 }
 
@@ -45,11 +45,17 @@ dependencies {
   implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactor")
   implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
 
-  // Webflux
-  api("org.springframework.boot:spring-boot-starter-webflux")
-  api("org.springframework.boot:spring-boot-starter-security")
-  api("org.springframework.boot:spring-boot-starter-security-oauth2-resource-server")
-  api("org.springframework.boot:spring-boot-starter-oauth2-client")
+  // Applications supply their own Spring Boot starters.
+  listOf(
+    "org.springframework.boot:spring-boot-starter-webflux",
+    "org.springframework.boot:spring-boot-starter-security",
+    "org.springframework.boot:spring-boot-starter-security-oauth2-resource-server",
+    "org.springframework.boot:spring-boot-starter-oauth2-client"
+  ).forEach {
+    compileOnly(it)
+    testImplementation(it)
+    testFixturesImplementation(it)
+  }
 
   implementation("com.github.freva:ascii-table:1.12.1")
 
@@ -72,9 +78,7 @@ dependencies {
   testFixturesImplementation(kotlin("stdlib"))
   testFixturesImplementation("org.springframework.shell:spring-shell-autoconfigure:$springShellVersion")
   testFixturesImplementation("org.jline:jline-terminal:3.26.3")
-  testFixturesImplementation("org.springframework.boot:spring-boot-starter-webflux")
   testFixturesImplementation("org.springframework.boot:spring-boot-autoconfigure")
-  testFixturesImplementation("org.springframework.boot:spring-boot-starter-security")
   testFixturesImplementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
 }
 
@@ -114,7 +118,7 @@ tasks.named<Test>("test") {
     events("passed", "skipped", "failed")
     showStandardStreams = true
   }
-  jvmArgs("-XX:+EnableDynamicAgentLoading", "-Xshare:off")
+  jvmArgs("-XX:+EnableDynamicAgentLoading", "-Xshare:off", "--enable-native-access=ALL-UNNAMED")
 }
 
 tasks.named<JacocoReport>("jacocoTestReport") {
