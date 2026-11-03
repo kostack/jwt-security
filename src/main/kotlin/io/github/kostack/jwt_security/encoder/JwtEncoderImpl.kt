@@ -13,8 +13,8 @@ import io.jsonwebtoken.security.SignatureAlgorithm
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.reactor.awaitSingle
 import kotlinx.coroutines.withContext
-import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator
 import org.springframework.security.oauth2.jwt.Jwt
+import org.springframework.security.oauth2.jwt.JwtIssuerValidator
 import org.springframework.security.oauth2.jwt.JwtTimestampValidator
 import org.springframework.security.oauth2.jwt.JwtValidators
 import org.springframework.security.oauth2.jwt.NimbusReactiveJwtDecoder
@@ -83,8 +83,8 @@ class JwtEncoderImpl(
       }.build()
       .apply {
         setJwtValidator(
-          DelegatingOAuth2TokenValidator(
-            JwtValidators.createDefaultWithIssuer(properties.issuer.name),
+          JwtValidators.createDefaultWithValidators(
+            JwtIssuerValidator(properties.issuer.name),
             JwtTimestampValidator(Duration.ZERO).apply { setClock(clock) },
             claimsValidator
           )
