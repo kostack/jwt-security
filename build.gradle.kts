@@ -140,7 +140,7 @@ tasks.named<JacocoCoverageVerification>("jacocoTestCoverageVerification") {
   violationRules {
     rule {
       limit {
-        minimum = "0.6".toBigDecimal()
+        minimum = "0.8".toBigDecimal()
       }
     }
   }
