@@ -108,9 +108,6 @@ val installGitHook =
 
 tasks.named<Test>("test") {
   useJUnitPlatform()
-
-  finalizedBy(tasks.named("jacocoTestReport"))
-  finalizedBy(tasks.named("jacocoTestCoverageVerification"))
   reports.junitXml.required.set(true)
 
   testLogging {
