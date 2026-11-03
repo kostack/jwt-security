@@ -37,6 +37,7 @@ dependencyManagement {
 
 dependencies {
   // Kotlin
+  implementation(kotlin("reflect"))
   implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core")
   implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactor")
   implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
@@ -44,6 +45,8 @@ dependencies {
   // Webflux
   api("org.springframework.boot:spring-boot-starter-webflux")
   api("org.springframework.boot:spring-boot-starter-security")
+  api("org.springframework.boot:spring-boot-starter-security-oauth2-resource-server")
+  api("org.springframework.boot:spring-boot-starter-oauth2-client")
 
   implementation("com.github.freva:ascii-table:1.12.1")
 

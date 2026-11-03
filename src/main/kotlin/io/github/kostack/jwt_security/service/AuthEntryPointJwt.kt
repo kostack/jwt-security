@@ -1,4 +1,4 @@
-package io.github.kostack.jwt_security.authentication
+package io.github.kostack.jwt_security.service
 
 import io.github.kostack.jwt_security.dto.Unauthorized
 import kotlinx.serialization.json.Json
@@ -36,7 +36,7 @@ class AuthEntryPointJwt : ServerAuthenticationEntryPoint {
     )
 
     return try {
-      val responseBytes = Json.encodeToString(body).toByteArray()
+      val responseBytes = json.encodeToString(body).toByteArray()
       val buffer: DataBuffer = response.bufferFactory().wrap(responseBytes)
       response.writeWith(Mono.just(buffer))
     } catch (e: Exception) {
@@ -50,6 +50,7 @@ class AuthEntryPointJwt : ServerAuthenticationEntryPoint {
   }
 
   companion object {
+    private val json = Json { encodeDefaults = true }
     private val log = LoggerFactory.getLogger(AuthEntryPointJwt::class.java)
   }
 }

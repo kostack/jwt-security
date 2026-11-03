@@ -1,12 +1,11 @@
 package io.github.kostack.jwt_security.model
 
-import io.github.kostack.jwt_security.service.JwtUser
+import io.github.kostack.jwt_security.dto.JwtUser
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
 
 @Serializable
 data class User(
-  val id: String? = null,
   val username: String,
   @Transient
   val roles: List<String> = emptyList()
@@ -14,9 +13,8 @@ data class User(
   override val identity: String
     get() = username
 
-  override fun toMap(): Map<String, Any> =
+  override fun claims(): Map<String, Any> =
     mapOf(
-      "id" to id!!,
       "username" to username,
       "roles" to roles
     )

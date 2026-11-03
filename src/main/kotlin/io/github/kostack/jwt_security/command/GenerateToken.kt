@@ -1,18 +1,18 @@
 package io.github.kostack.jwt_security.command
 
 import com.github.freva.asciitable.AsciiTable
-import io.github.kostack.jwt_security.service.JwtManager
-import io.github.kostack.jwt_security.service.JwtUserService
+import io.github.kostack.jwt_security.encoder.JwtEncoder
+import io.github.kostack.jwt_security.service.UserProvider
 import kotlinx.coroutines.runBlocking
-import org.springframework.beans.factory.ObjectProvider
+import org.springframework.security.core.userdetails.UsernameNotFoundException
 import org.springframework.shell.command.annotation.Option
 import org.springframework.shell.standard.ShellComponent
 import org.springframework.shell.standard.ShellMethod
 
 @ShellComponent
 class GenerateToken(
-  private val jwtManager: JwtManager,
-  private val userService: ObjectProvider<JwtUserService>
+  private val userProvider: UserProvider,
+  private val jwtEncoder: JwtEncoder
 ) {
   @ShellMethod(
     key = ["security:generate-token"],
@@ -22,28 +22,32 @@ class GenerateToken(
     @Option(longNames = ["identity"], shortNames = ['u'], required = true)
     identity: String
   ) = runBlocking {
-    val jwtUserService = userService.getIfAvailable()
-    if (jwtUserService == null) {
-      println("JwtUserService bean not found")
-      return@runBlocking
-    }
-
-    val user = jwtUserService.findByIdentity(identity)
-    if (user == null) {
-      println("User not found: $identity")
-      return@runBlocking
-    }
-
-    val token = jwtManager.generateToken(user)
-    val claims = jwtManager.getClaims(token).payload
+    val user =
+      userProvider.load(identity, emptyMap())
+        ?: throw UsernameNotFoundException("User not found")
+    val token = jwtEncoder.encode(user)
+    val decoded = jwtEncoder.decode(token)
 
     println("\nGenerated Token:")
     println("=".repeat(50))
     println(token)
     println("=".repeat(50))
 
+    val headersData =
+      decoded.headers.entries
+        .map { arrayOf(it.key, it.value.toString()) }
+        .toTypedArray()
+
+    println(
+      "\nHeaders:\n" +
+        AsciiTable.getTable(
+          arrayOf("Key", "Value"),
+          headersData
+        )
+    )
+
     val claimsData =
-      claims.entries
+      decoded.claims.entries
         .map { arrayOf(it.key, it.value.toString()) }
         .toTypedArray()
 

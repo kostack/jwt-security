@@ -1,1 +1,1 @@
-io.github.kostack.jwt_security.autoconfigure.JwtSecurityAutoConfiguration
+io.github.kostack.jwt_security.autoconfigure.SecurityAutoConfiguration

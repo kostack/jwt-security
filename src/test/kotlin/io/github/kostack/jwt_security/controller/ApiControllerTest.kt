@@ -1,9 +1,8 @@
 package io.github.kostack.jwt_security.controller
 
 import io.github.kostack.jwt_security.TestApplication
-import io.github.kostack.jwt_security.autoconfigure.JwtProperties
 import io.github.kostack.jwt_security.service.JwtManager
-import io.github.kostack.jwt_security.service.UserService
+import io.github.kostack.jwt_security.service.UserProviderImpl
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.MethodOrderer
@@ -29,7 +28,7 @@ class ApiControllerTest {
 
   @Autowired lateinit var jwtManager: JwtManager
 
-  @Autowired lateinit var userService: UserService
+  @Autowired lateinit var userService: UserProviderImpl
 
   @LocalServerPort
   protected var port: Int = 0

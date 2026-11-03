@@ -1,9 +1,6 @@
 package io.github.kostack.jwt_security.autoconfigure
 
 import io.github.kostack.jwt_security.authentication.AuthEntryPointJwt
-import io.github.kostack.jwt_security.authentication.JwtServerAuthenticationConverter
-import io.github.kostack.jwt_security.authentication.TokenAuthenticationManager
-import io.github.kostack.jwt_security.command.GenerateToken
 import io.github.kostack.jwt_security.extractor.HeaderExtractor
 import io.github.kostack.jwt_security.extractor.QueryParameterExtractor
 import io.github.kostack.jwt_security.service.JwtManager
@@ -16,7 +13,7 @@ import org.junit.jupiter.api.Test
 import org.springframework.boot.autoconfigure.AutoConfigurations
 import org.springframework.boot.test.context.runner.ApplicationContextRunner
 
-class JwtSecurityAutoConfigurationTest {
+class SecurityAutoConfigureTest {
   private val contextRunner =
     ApplicationContextRunner()
       .withConfiguration(AutoConfigurations.of(JwtSecurityAutoConfiguration::class.java))
