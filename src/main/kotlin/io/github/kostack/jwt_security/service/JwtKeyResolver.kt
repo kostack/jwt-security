@@ -14,7 +14,7 @@ class JwtKeyResolver(
       return PemKeys.privateKey(properties.issuer.privateKey)
     } catch (e: Exception) {
       log.error("Failed to initialize private JWT key: ${e.stackTraceToString()}")
-      throw IllegalStateException("Invalid private key")
+      throw IllegalStateException("Invalid private key", e)
     }
   }
 
