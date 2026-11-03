@@ -18,7 +18,7 @@ group = "io.github.kostack"
 version = providers.gradleProperty("projectVersion").getOrElse("1.0.0")
 description = "JWT Security"
 
-val springShellVersion = "3.4.0"
+val springShellVersion = "4.0.3"
 
 java {
   toolchain {
@@ -33,6 +33,7 @@ repositories {
 dependencyManagement {
   imports {
     mavenBom(org.springframework.boot.gradle.plugin.SpringBootPlugin.BOM_COORDINATES)
+    mavenBom("org.springframework.shell:spring-shell-dependencies:$springShellVersion")
   }
 }
 
@@ -65,8 +66,7 @@ dependencies {
   runtimeOnly("io.jsonwebtoken:jjwt-jackson:0.13.0")
 
   // Shell
-  implementation("org.springframework.shell:spring-shell-starter:$springShellVersion")
-  testImplementation("org.springframework.shell:spring-shell-starter:$springShellVersion")
+  implementation("org.springframework.shell:spring-shell-starter-jni")
 
   testImplementation("org.springframework.boot:spring-boot-starter-test")
   testRuntimeOnly("org.junit.platform:junit-platform-launcher")
@@ -76,8 +76,8 @@ dependencies {
   testImplementation(kotlin("test"))
 
   testFixturesImplementation(kotlin("stdlib"))
-  testFixturesImplementation("org.springframework.shell:spring-shell-autoconfigure:$springShellVersion")
-  testFixturesImplementation("org.jline:jline-terminal:3.26.3")
+  testFixturesImplementation("org.springframework.shell:spring-shell-core-autoconfigure")
+  testFixturesImplementation("org.springframework.shell:spring-shell-jline")
   testFixturesImplementation("org.springframework.boot:spring-boot-autoconfigure")
   testFixturesImplementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
 }

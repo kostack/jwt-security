@@ -3,7 +3,7 @@ package io.github.kostack.jwt_security
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.runApplication
 import org.springframework.context.annotation.Bean
-import org.springframework.shell.boot.TerminalCustomizer
+import org.springframework.shell.core.autoconfigure.TerminalCustomizer
 
 @SpringBootApplication
 class TestApplication {

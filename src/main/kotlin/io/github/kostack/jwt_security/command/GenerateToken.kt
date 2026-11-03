@@ -5,21 +5,21 @@ import io.github.kostack.jwt_security.encoder.JwtEncoder
 import io.github.kostack.jwt_security.service.UserProvider
 import kotlinx.coroutines.runBlocking
 import org.springframework.security.core.userdetails.UsernameNotFoundException
-import org.springframework.shell.command.annotation.Option
-import org.springframework.shell.standard.ShellComponent
-import org.springframework.shell.standard.ShellMethod
+import org.springframework.shell.core.command.annotation.Command
+import org.springframework.shell.core.command.annotation.Option
+import org.springframework.stereotype.Component
 
-@ShellComponent
+@Component
 class GenerateToken(
   private val userProvider: UserProvider,
   private val jwtEncoder: JwtEncoder
 ) {
-  @ShellMethod(
-    key = ["security:generate-token"],
-    value = "Generate a JWT token for the given user identity"
+  @Command(
+    name = ["security:generate-token"],
+    description = "Generate a JWT token for the given user identity"
   )
   fun generateToken(
-    @Option(longNames = ["identity"], shortNames = ['u'], required = true)
+    @Option(longName = "identity", shortName = 'u', required = true)
     identity: String
   ) = runBlocking {
     val user =

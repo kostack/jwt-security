@@ -340,7 +340,7 @@ can replace user loading and the resulting authentication type.
 
 ## Spring Shell
 
-The library includes `GenerateToken`, a `@ShellComponent`. Import it explicitly
+The library includes `GenerateToken`, a `@Component` with a Spring Shell `@Command`. Import it explicitly
 when your application's component scan does not include the library package:
 
 ```kotlin
