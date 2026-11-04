@@ -186,14 +186,15 @@ import io.github.kostack.jwt_security.dto.JwtUser
 import io.github.kostack.jwt_security.encoder.JwtEncoder
 import org.springframework.security.oauth2.jwt.Jwt
 import org.springframework.stereotype.Service
+import java.time.Clock
 
 @Service
-class TokenService(private val encoder: JwtEncoder) {
+class TokenService(private val encoder: JwtEncoder, private val clock: Clock) {
     suspend fun issue(user: JwtUser): String =
         encoder.encode(user, mapOf("tenant" to "acme"))
 
     suspend fun issueShortLived(user: JwtUser): String =
-        encoder.encode(user, mapOf("tenant" to "acme"), expiration = 60L)
+        encoder.encode(user, mapOf("tenant" to "acme"), expiresAt = clock.instant().plusSeconds(60))
 
     suspend fun inspect(token: String): Jwt = encoder.decode(token)
 }
@@ -203,10 +204,11 @@ class TokenService(private val encoder: JwtEncoder) {
 `ReactiveJwtDecoder` for Reactor integrations. Issue a token only after your
 application has authenticated the user; `encode` does not perform credential checks.
 
-The optional `expiration: Long?` argument sets the lifetime of that token in seconds
-from the injected clock's current time. Omitting it or passing `null` uses
-`issuer.expiration-time`. For example, `expiration = 60L` issues a token that expires
-in one minute. This override does not change the configured lifetime for other tokens.
+The optional `expiresAt: Instant?` argument sets the absolute expiry for the token.
+Omitting it or passing `null` uses the injected clock's current time plus
+`issuer.expiration-time` seconds. An explicit timestamp is used directly for `exp`.
+The encoder overrides any supplied `exp` claim. Past timestamps are preserved;
+decoding an expired token fails validation.
 
 Token issuance uses:
 
@@ -219,7 +221,7 @@ Token issuance uses:
 | `aud` | Includes `issuer.audience` |
 | `iat` | Current injected clock time |
 | `nbf` | Current clock time minus one second |
-| `exp` | Current clock time plus `expiration` seconds, falling back to `issuer.expiration-time` when null |
+| `exp` | Absolute `expiresAt`, or current injected clock time plus `issuer.expiration-time` seconds when omitted or null |
 
 Additional claims override entries returned by `user.claims()`.
 The encoder then sets the subject, issuer, and timestamps, overriding supplied values
@@ -412,7 +414,7 @@ All properties use the `kostack-security` prefix.
 | `issuer.audience` | `""` | Audience added on issuance and required on decoding |
 | `issuer.private-key` | `""` | Base64-encoded PKCS#8 PEM private key |
 | `issuer.algorithm-signature` | `RS512` | Signing algorithm: RS256, RS384, or RS512 |
-| `issuer.expiration-time` | `3600` | Default token lifetime in seconds (`Long`); overridden by a non-null `encode` expiration argument |
+| `issuer.expiration-time` | `3600` | Default token lifetime in seconds (`Long`) when `expiresAt` is omitted or null |
 | `public-keys` | `{local: ""}` | Key ID to Base64-encoded X.509 PEM public key |
 | `authorities-claim` | `roles` | Claim used to extract granted authorities |
 | `authority-prefix` | `""` | Prefix added to each authority |

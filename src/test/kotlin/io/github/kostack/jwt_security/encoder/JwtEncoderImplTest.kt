@@ -56,7 +56,7 @@ class JwtEncoderImplTest {
     runBlocking {
       properties.issuer.algorithmSignature = algorithm
 
-      val signed = SignedJWT.parse(encoder.encode(user))
+      val signed = SignedJWT.parse(encoder.encode(user, expiresAt = now.plusSeconds(300)))
 
       assertThat(signed.header.algorithm.name).isEqualTo(algorithm.name)
       assertThat(signed.header.keyID).isEqualTo("test-key")
@@ -66,7 +66,8 @@ class JwtEncoderImplTest {
   @Test
   fun `encodes user claims and configured registered claims using the injected clock`(): Unit =
     runBlocking {
-      val claims = SignedJWT.parse(encoder.encode(user, mapOf("tenant" to "acme"))).jwtClaimsSet
+      val token = encoder.encode(user, mapOf("tenant" to "acme"))
+      val claims = SignedJWT.parse(token).jwtClaimsSet
 
       assertThat(claims.subject).isEqualTo(user.identity)
       assertThat(claims.issuer).isEqualTo(properties.issuer.name)
@@ -80,33 +81,70 @@ class JwtEncoderImplTest {
     }
 
   @Test
-  fun `null expiration uses the configured lifetime`(): Unit =
+  fun `omitted and null absolute expiry use the configured lifetime`(): Unit =
     runBlocking {
       properties.issuer.expirationTime = 900
+      val publicEncoder: JwtEncoder = encoder
 
-      val claims = SignedJWT.parse(encoder.encode(user, expiration = null)).jwtClaimsSet
+      val omitted = publicEncoder.decode(publicEncoder.encode(user, mapOf("exp" to 1L)))
+      val explicitNull = publicEncoder.decode(publicEncoder.encode(user, expiresAt = null))
 
-      assertThat(claims.expirationTime.toInstant()).isEqualTo(now.plusSeconds(900))
+      assertThat(omitted.issuedAt).isEqualTo(now)
+      assertThat(omitted.expiresAt).isEqualTo(now.plusSeconds(900))
+      assertThat(explicitNull.expiresAt).isEqualTo(now.plusSeconds(900))
     }
 
-  @ParameterizedTest
-  @ValueSource(longs = [60, 600])
-  fun `custom expiration overrides configured lifetime and additional exp claim for one token`(expiration: Long): Unit =
+  @Test
+  fun `absolute expiry overrides supplied exp claims without adding the current time`(): Unit =
     runBlocking {
-      val token = encoder.encode(user, mapOf("exp" to 1L, "tenant" to "acme"), expiration = expiration)
-      val jwt = encoder.decode(token)
+      val expiresAt = now.plusSeconds(600)
+      val publicEncoder: JwtEncoder = encoder
+      val jwt = publicEncoder.decode(publicEncoder.encode(user, mapOf("exp" to 1L), expiresAt = expiresAt))
 
       assertThat(jwt.issuedAt).isEqualTo(now)
-      assertThat(jwt.expiresAt).isEqualTo(now.plusSeconds(expiration))
-      assertThat(jwt.getClaimAsString("tenant")).isEqualTo("acme")
+      assertThat(jwt.expiresAt).isEqualTo(expiresAt)
       assertThat(properties.issuer.expirationTime).isEqualTo(300)
       assertThat(encoder.decode(encoder.encode(user)).expiresAt).isEqualTo(now.plusSeconds(300))
     }
 
   @Test
-  fun `rejects an encoded token after its custom lifetime expires`(): Unit =
+  fun `absolute expiry stays fixed when issuing at different clock times`(): Unit =
     runBlocking {
-      val token = encoder.encode(user, expiration = 60L)
+      val laterNow = now.plusSeconds(60)
+      val expiresAt = now.plusSeconds(600)
+      val laterEncoder =
+        JwtEncoderImpl(
+          resolver,
+          properties,
+          Clock.fixed(laterNow, ZoneOffset.UTC),
+          RequiredJwtClaimsValidator(properties)
+        )
+
+      val jwt = laterEncoder.decode(laterEncoder.encode(user, expiresAt = expiresAt))
+
+      assertThat(jwt.issuedAt).isEqualTo(laterNow)
+      assertThat(jwt.expiresAt).isEqualTo(expiresAt)
+    }
+
+  @Test
+  fun `absolute expiry in the past is preserved and rejected on decode`(): Unit =
+    runBlocking {
+      val expiresAt = now.minusSeconds(1)
+      val token = encoder.encode(user, expiresAt = expiresAt)
+
+      assertThat(
+        SignedJWT
+          .parse(token)
+          .jwtClaimsSet.expirationTime
+          .toInstant()
+      ).isEqualTo(expiresAt)
+      assertFailsWith<JwtException> { encoder.decode(token) }
+    }
+
+  @Test
+  fun `rejects an encoded token after its absolute expiry`(): Unit =
+    runBlocking {
+      val token = encoder.encode(user, expiresAt = now.plusSeconds(60))
       val laterEncoder =
         JwtEncoderImpl(
           resolver,
@@ -121,7 +159,13 @@ class JwtEncoderImplTest {
   @Test
   fun `additional claims override user claims`(): Unit =
     runBlocking {
-      val jwt = encoder.decode(encoder.encode(user, mapOf("roles" to listOf("ROLE_ADMIN"), "name" to "Bob")))
+      val token =
+        encoder.encode(
+          user,
+          mapOf("roles" to listOf("ROLE_ADMIN"), "name" to "Bob"),
+          expiresAt = now.plusSeconds(300)
+        )
+      val jwt = encoder.decode(token)
 
       assertThat(jwt.getClaimAsStringList("roles")).containsExactly("ROLE_ADMIN")
       assertThat(jwt.getClaimAsString("name")).isEqualTo("Bob")
@@ -135,7 +179,8 @@ class JwtEncoderImplTest {
           .parse(
             encoder.encode(
               user,
-              mapOf("sub" to "attacker", "iss" to "other", "iat" to 1L, "nbf" to 1L, "exp" to 2L)
+              mapOf("sub" to "attacker", "iss" to "other", "iat" to 1L, "nbf" to 1L, "exp" to 2L),
+              expiresAt = now.plusSeconds(300)
             )
           ).jwtClaimsSet
 
@@ -151,7 +196,7 @@ class JwtEncoderImplTest {
   fun `decodes tokens signed with supported RSA algorithms`(algorithm: SignatureAlgorithm): Unit =
     runBlocking {
       properties.issuer.algorithmSignature = algorithm
-      val token = encoder.encode(user)
+      val token = encoder.encode(user, expiresAt = now.plusSeconds(300))
 
       val jwt = encoder.decode(token)
 
@@ -163,7 +208,7 @@ class JwtEncoderImplTest {
   @Test
   fun `exposes a reactive decoder with the same validation`(): Unit =
     runBlocking {
-      val token = encoder.encode(user)
+      val token = encoder.encode(user, expiresAt = now.plusSeconds(300))
 
       assertThat(
         encoder
@@ -301,7 +346,7 @@ class JwtEncoderImplTest {
     runBlocking {
       properties.issuer.privateKey = "invalid"
 
-      assertFailsWith<IllegalStateException> { encoder.encode(user) }
+      assertFailsWith<IllegalStateException> { encoder.encode(user, expiresAt = now.plusSeconds(300)) }
     }
 
   @ParameterizedTest
@@ -311,7 +356,8 @@ class JwtEncoderImplTest {
       val fixedClock = Clock.fixed(Instant.parse(instant), ZoneOffset.UTC)
       val fixedClockEncoder =
         JwtEncoderImpl(resolver, properties, fixedClock, RequiredJwtClaimsValidator(properties))
-      assertThat(fixedClockEncoder.decode(fixedClockEncoder.encode(user)).subject).isEqualTo(user.identity)
+      val token = fixedClockEncoder.encode(user, expiresAt = fixedClock.instant().plusSeconds(300))
+      assertThat(fixedClockEncoder.decode(token).subject).isEqualTo(user.identity)
     }
 
   private fun validClaims(): Map<String, Any> =

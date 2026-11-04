@@ -19,6 +19,7 @@ import org.springframework.shell.core.ShellRunner
 import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
 import org.springframework.test.web.reactive.server.WebTestClient
+import java.time.Clock
 
 @SpringBootTest(
   classes = [TestApplication::class],
@@ -30,6 +31,8 @@ import org.springframework.test.web.reactive.server.WebTestClient
 class ApiControllerTest {
   @Autowired lateinit var jwtEncoder: JwtEncoder
 
+  @Autowired lateinit var clock: Clock
+
   @Autowired lateinit var shellRunner: ShellRunner
 
   @LocalServerPort
@@ -39,7 +42,7 @@ class ApiControllerTest {
 
   private fun token(): String =
     runBlocking {
-      jwtEncoder.encode(User("admin", listOf("ROLE_ADMIN")))
+      jwtEncoder.encode(User("admin", listOf("ROLE_ADMIN")), expiresAt = clock.instant().plusSeconds(300))
     }
 
   @ParameterizedTest

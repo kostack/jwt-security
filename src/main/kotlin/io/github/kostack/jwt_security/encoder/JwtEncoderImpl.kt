@@ -22,6 +22,7 @@ import org.springframework.security.oauth2.jwt.ReactiveJwtDecoder
 import reactor.core.publisher.Flux
 import java.time.Clock
 import java.time.Duration
+import java.time.Instant
 import java.util.Date
 
 class JwtEncoderImpl(
@@ -33,13 +34,12 @@ class JwtEncoderImpl(
   override suspend fun encode(
     user: JwtUser,
     additionalClaims: Map<String, Any>,
-    expiration: Long?
+    expiresAt: Instant?
   ): String =
     withContext(Dispatchers.IO) {
+      val now = clock.instant()
       val privateKey = keyResolver.privateKey()
       val algorithm = Jwts.SIG.get().forKey(properties.issuer.algorithmSignature.name) as SignatureAlgorithm
-      val now = clock.instant()
-      val exp = expiration ?: properties.issuer.expirationTime
       return@withContext Jwts
         .builder()
         .header()
@@ -53,9 +53,8 @@ class JwtEncoderImpl(
         .and()
         .issuedAt(Date.from(now))
         .notBefore(Date.from(now.minusSeconds(1)))
-        .expiration(
-          Date.from(now.plusSeconds(exp))
-        ).signWith(privateKey, algorithm)
+        .expiration(Date.from(expiresAt ?: now.plusSeconds(properties.issuer.expirationTime)))
+        .signWith(privateKey, algorithm)
         .compact()
     }
 
