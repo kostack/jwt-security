@@ -32,12 +32,14 @@ class JwtEncoderImpl(
 ) : JwtEncoder {
   override suspend fun encode(
     user: JwtUser,
-    additionalClaims: Map<String, Any>
+    additionalClaims: Map<String, Any>,
+    expiration: Long?
   ): String =
     withContext(Dispatchers.IO) {
       val privateKey = keyResolver.privateKey()
       val algorithm = Jwts.SIG.get().forKey(properties.issuer.algorithmSignature.name) as SignatureAlgorithm
       val now = clock.instant()
+      val exp = expiration ?: properties.issuer.expirationTime
       return@withContext Jwts
         .builder()
         .header()
@@ -52,7 +54,7 @@ class JwtEncoderImpl(
         .issuedAt(Date.from(now))
         .notBefore(Date.from(now.minusSeconds(1)))
         .expiration(
-          Date.from(now.plusSeconds(properties.issuer.expirationTime))
+          Date.from(now.plusSeconds(exp))
         ).signWith(privateKey, algorithm)
         .compact()
     }

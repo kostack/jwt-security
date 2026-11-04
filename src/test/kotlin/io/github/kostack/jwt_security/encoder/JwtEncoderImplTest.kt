@@ -80,6 +80,45 @@ class JwtEncoderImplTest {
     }
 
   @Test
+  fun `null expiration uses the configured lifetime`(): Unit =
+    runBlocking {
+      properties.issuer.expirationTime = 900
+
+      val claims = SignedJWT.parse(encoder.encode(user, expiration = null)).jwtClaimsSet
+
+      assertThat(claims.expirationTime.toInstant()).isEqualTo(now.plusSeconds(900))
+    }
+
+  @ParameterizedTest
+  @ValueSource(longs = [60, 600])
+  fun `custom expiration overrides configured lifetime and additional exp claim for one token`(expiration: Long): Unit =
+    runBlocking {
+      val token = encoder.encode(user, mapOf("exp" to 1L, "tenant" to "acme"), expiration = expiration)
+      val jwt = encoder.decode(token)
+
+      assertThat(jwt.issuedAt).isEqualTo(now)
+      assertThat(jwt.expiresAt).isEqualTo(now.plusSeconds(expiration))
+      assertThat(jwt.getClaimAsString("tenant")).isEqualTo("acme")
+      assertThat(properties.issuer.expirationTime).isEqualTo(300)
+      assertThat(encoder.decode(encoder.encode(user)).expiresAt).isEqualTo(now.plusSeconds(300))
+    }
+
+  @Test
+  fun `rejects an encoded token after its custom lifetime expires`(): Unit =
+    runBlocking {
+      val token = encoder.encode(user, expiration = 60L)
+      val laterEncoder =
+        JwtEncoderImpl(
+          resolver,
+          properties,
+          Clock.fixed(now.plusSeconds(61), ZoneOffset.UTC),
+          RequiredJwtClaimsValidator(properties)
+        )
+
+      assertFailsWith<JwtValidationException> { laterEncoder.decode(token) }
+    }
+
+  @Test
   fun `additional claims override user claims`(): Unit =
     runBlocking {
       val jwt = encoder.decode(encoder.encode(user, mapOf("roles" to listOf("ROLE_ADMIN"), "name" to "Bob")))
