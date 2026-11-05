@@ -1,6 +1,7 @@
 package io.github.kostack.jwt_security.converter
 
 import io.github.kostack.jwt_security.service.UserProvider
+import org.slf4j.LoggerFactory
 import org.springframework.security.authentication.BadCredentialsException
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
 import org.springframework.security.core.Authentication
@@ -13,6 +14,7 @@ class JwtUserAuthenticationTokenFactory(
     jwt: Jwt,
     authentication: Authentication
   ): UsernamePasswordAuthenticationToken {
+    log.debug("Creating authentication token for JWT with subject: ${jwt.subject}")
     val subject =
       jwt.subject?.takeIf { it.isNotBlank() }
         ?: throw BadCredentialsException("Missing subject")
@@ -24,5 +26,9 @@ class JwtUserAuthenticationTokenFactory(
       null,
       authentication.authorities
     )
+  }
+
+  companion object {
+    private val log = LoggerFactory.getLogger(JwtUserAuthenticationTokenFactory::class.java)
   }
 }
