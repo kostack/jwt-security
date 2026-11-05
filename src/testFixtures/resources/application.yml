@@ -12,11 +12,19 @@ logging:
         security: DEBUG
 
 kostack-security:
+  # HTTP authentication and JwtEncoder.decode() accept only configured trusted issuers.
   issuer:
-    kid: local
-    name: security-local.kostack.io
+    kid: security-local.kostack.io
     audience: kostack
     expiration-time: 900
+    #private-key: generated and supplied by TestJwtKeys.properties at startup
+    algorithm-signature: RS512
+  trusted-issuers:
+    local:
+      issuer: security-local.kostack.io
+      audience: kostack
+      algorithm: RS512
+      #public-key: generated and supplied by TestJwtKeys.properties at startup
   authorization-header:
     name: x-auth
     prefix: ""

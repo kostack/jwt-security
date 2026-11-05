@@ -8,8 +8,13 @@ import org.springframework.security.oauth2.jwt.Jwt
 class RequiredJwtClaimsValidator(
   private val properties: SecurityProperties
 ) : JwtClaimsValidator {
-  override fun validate(jwt: Jwt): OAuth2TokenValidatorResult =
-    if (jwt.audience?.contains(properties.issuer.audience) == true &&
+  override fun validate(jwt: Jwt): OAuth2TokenValidatorResult {
+    val audience =
+      properties.trustedIssuers.values
+        .firstOrNull { it.issuer == jwt.getClaimAsString("iss") }
+        ?.audience
+        ?: properties.issuer.audience
+    return if (jwt.audience?.contains(audience) == true &&
       jwt.claims.containsKey(properties.authoritiesClaim) &&
       jwt.expiresAt != null &&
       !jwt.subject.isNullOrBlank()
@@ -24,4 +29,5 @@ class RequiredJwtClaimsValidator(
         )
       )
     }
+  }
 }

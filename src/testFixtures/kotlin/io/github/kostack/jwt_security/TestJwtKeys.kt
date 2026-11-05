@@ -9,7 +9,11 @@ object TestJwtKeys {
     val pair = KeyPairGenerator.getInstance("RSA").apply { initialize(4096) }.generateKeyPair()
     mapOf(
       "kostack-security.issuer.private-key" to encodedPem("PRIVATE KEY", pair.private.encoded),
-      "kostack-security.public-keys.local" to encodedPem("PUBLIC KEY", pair.public.encoded)
+      "kostack-security.issuer.kid" to "security-local.kostack.io",
+      "kostack-security.trusted-issuers.local.issuer" to "security-local.kostack.io",
+      "kostack-security.trusted-issuers.local.audience" to "kostack",
+      "kostack-security.trusted-issuers.local.algorithm" to "RS512",
+      "kostack-security.trusted-issuers.local.public-key" to encodedPem("PUBLIC KEY", pair.public.encoded)
     )
   }
 

@@ -18,9 +18,15 @@ class JwtKeyResolver(
     }
   }
 
-  fun publicKey(kid: String): RSAPublicKey {
+  fun publicKey(
+    kid: String,
+    issuer: String = properties.issuer.kid
+  ): RSAPublicKey {
     val configuredKey =
-      properties.publicKeys[kid]
+      properties.trustedIssuers.values
+        .firstOrNull { it.issuer == issuer && it.issuer == kid }
+        ?.publicKey
+        ?.takeIf { it.isNotBlank() }
         ?: throw IllegalArgumentException("No public key found: $kid")
     return PemKeys.publicKey(configuredKey)
   }

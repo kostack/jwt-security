@@ -11,15 +11,19 @@ import io.github.kostack.jwt_security.encoder.JwtEncoderImpl
 import io.github.kostack.jwt_security.encoder.RequiredJwtClaimsValidator
 import io.github.kostack.jwt_security.service.AuthEntryPointJwt
 import io.github.kostack.jwt_security.service.JwtKeyResolver
+import io.github.kostack.jwt_security.service.TrustedIssuerAuthenticationManagerResolver
 import io.github.kostack.jwt_security.service.UserProvider
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
+import org.springframework.context.annotation.Conditional
+import org.springframework.security.authentication.ReactiveAuthenticationManagerResolver
 import org.springframework.security.oauth2.jwt.ReactiveJwtDecoder
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter
 import org.springframework.security.oauth2.server.resource.authentication.ReactiveJwtAuthenticationConverter
 import org.springframework.security.oauth2.server.resource.authentication.ReactiveJwtGrantedAuthoritiesConverterAdapter
+import org.springframework.web.server.ServerWebExchange
 import java.time.Clock
 
 @AutoConfiguration
@@ -86,6 +90,16 @@ class SecurityAutoConfiguration {
   @Bean
   @ConditionalOnMissingBean
   fun jwtDecoder(encoder: JwtEncoder): ReactiveJwtDecoder = encoder.decoder()
+
+  @Bean
+  @ConditionalOnMissingBean(ReactiveAuthenticationManagerResolver::class)
+  @Conditional(TrustedIssuersConfiguredCondition::class)
+  fun trustedIssuerAuthenticationManagerResolver(
+    properties: SecurityProperties,
+    decoder: ReactiveJwtDecoder,
+    converter: JwtAuthenticationConverter
+  ): ReactiveAuthenticationManagerResolver<ServerWebExchange> =
+    TrustedIssuerAuthenticationManagerResolver(properties, decoder, converter)
 
   @Bean
   @ConditionalOnMissingBean

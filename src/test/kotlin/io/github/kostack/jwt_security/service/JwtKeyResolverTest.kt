@@ -12,14 +12,27 @@ import kotlin.test.assertFailsWith
 class JwtKeyResolverTest {
   private val properties =
     SecurityProperties(
-      issuer = SecurityProperties.Issuer(privateKey = encodedPem("PRIVATE KEY", firstKey.private.encoded)),
-      publicKeys =
+      issuer =
+        SecurityProperties.Issuer(
+          kid = "https://issuer.local",
+          privateKey = encodedPem("PRIVATE KEY", firstKey.private.encoded)
+        ),
+      trustedIssuers =
         mapOf(
-          "first" to encodedPem("PUBLIC KEY", firstKey.public.encoded),
-          "second" to encodedPem("PUBLIC KEY", secondKey.public.encoded)
+          "local" to
+            SecurityProperties.TrustedIssuer(
+              issuer = "https://issuer.local",
+              publicKey = encodedPem("PUBLIC KEY", firstKey.public.encoded)
+            ),
+          "second" to
+            SecurityProperties.TrustedIssuer(
+              issuer = "https://second.test",
+              publicKey = encodedPem("PUBLIC KEY", secondKey.public.encoded)
+            )
         )
     )
   private val resolver = JwtKeyResolver(properties)
+  private val trustedIssuer get() = properties.trustedIssuers.getValue("local")
 
   @Test
   fun `loads the configured RSA private key`() {
@@ -27,22 +40,40 @@ class JwtKeyResolverTest {
   }
 
   @Test
-  fun `selects the RSA public key by key ID`() {
-    assertThat(resolver.publicKey("first").encoded).isEqualTo(firstKey.public.encoded)
-    assertThat(resolver.publicKey("second").encoded).isEqualTo(secondKey.public.encoded)
+  fun `selects the single RSA public key for each issuer`() {
+    assertThat(resolver.publicKey("https://issuer.local").encoded).isEqualTo(firstKey.public.encoded)
+    assertThat(
+      resolver.publicKey("https://second.test", "https://second.test").encoded
+    ).isEqualTo(secondKey.public.encoded)
+  }
+
+  @Test
+  fun `rejects a key ID belonging to another issuer`() {
+    properties.trustedIssuers = properties.trustedIssuers + (
+      "other" to
+        SecurityProperties.TrustedIssuer(
+          issuer = "https://other.test",
+          publicKey = encodedPem("PUBLIC KEY", secondKey.public.encoded)
+        )
+    )
+    assertThat(resolver.publicKey("https://issuer.local").encoded).isEqualTo(firstKey.public.encoded)
+    assertThat(resolver.publicKey("https://other.test", "https://other.test").encoded)
+      .isEqualTo(secondKey.public.encoded)
+    assertFailsWith<IllegalArgumentException> { resolver.publicKey("https://issuer.local", "https://other.test") }
+    assertFailsWith<IllegalArgumentException> { resolver.publicKey("https://issuer.local", "https://unknown.test") }
   }
 
   @Test
   fun `accepts surrounding whitespace in encoded keys`() {
     properties.issuer.privateKey = " \n${properties.issuer.privateKey}\t "
-    properties.publicKeys = mapOf("first" to " \n${properties.publicKeys.getValue("first")}\t ")
+    trustedIssuer.publicKey = " \n${trustedIssuer.publicKey}\t "
 
     assertThat(resolver.privateKey().encoded).isEqualTo(firstKey.private.encoded)
-    assertThat(resolver.publicKey("first").encoded).isEqualTo(firstKey.public.encoded)
+    assertThat(resolver.publicKey("https://issuer.local").encoded).isEqualTo(firstKey.public.encoded)
   }
 
   @ParameterizedTest
-  @ValueSource(strings = ["unknown", "", "FIRST", " first "])
+  @ValueSource(strings = ["unknown", "", "HTTPS://ISSUER.LOCAL", " https://issuer.local "])
   fun `rejects a key ID without an exact configured match`(kid: String) {
     val failure = assertFailsWith<IllegalArgumentException> { resolver.publicKey(kid) }
 
@@ -50,12 +81,12 @@ class JwtKeyResolverTest {
   }
 
   @Test
-  fun `rejects public key lookup with an empty key map`() {
-    properties.publicKeys = emptyMap()
+  fun `rejects public key lookup without a configured key`() {
+    trustedIssuer.publicKey = ""
 
-    val failure = assertFailsWith<IllegalArgumentException> { resolver.publicKey("first") }
+    val failure = assertFailsWith<IllegalArgumentException> { resolver.publicKey("https://issuer.local") }
 
-    assertThat(failure.message).isEqualTo("No public key found: first")
+    assertThat(failure.message).isEqualTo("No public key found: https://issuer.local")
   }
 
   @ParameterizedTest
@@ -72,10 +103,12 @@ class JwtKeyResolverTest {
   @ParameterizedTest
   @ValueSource(strings = ["", " ", "invalid-base64!", "bm90IGEgUEVNIGtleQ=="])
   fun `rejects malformed public keys without falling back to another key`(key: String) {
-    properties.publicKeys = properties.publicKeys + ("first" to key)
+    trustedIssuer.publicKey = key
 
-    assertFailsWith<IllegalArgumentException> { resolver.publicKey("first") }
-    assertThat(resolver.publicKey("second").encoded).isEqualTo(secondKey.public.encoded)
+    assertFailsWith<IllegalArgumentException> { resolver.publicKey("https://issuer.local") }
+    assertThat(
+      resolver.publicKey("https://second.test", "https://second.test").encoded
+    ).isEqualTo(secondKey.public.encoded)
   }
 
   @Test
@@ -90,21 +123,21 @@ class JwtKeyResolverTest {
 
   @Test
   fun `rejects a private key configured as a public key`() {
-    properties.publicKeys = mapOf("first" to encodedPem("PRIVATE KEY", firstKey.private.encoded))
+    trustedIssuer.publicKey = encodedPem("PRIVATE KEY", firstKey.private.encoded)
 
-    assertFailsWith<IllegalArgumentException> { resolver.publicKey("first") }
+    assertFailsWith<IllegalArgumentException> { resolver.publicKey("https://issuer.local") }
   }
 
   @Test
   fun `reads updated key configuration on subsequent lookups`() {
     resolver.privateKey()
-    resolver.publicKey("first")
+    resolver.publicKey("https://issuer.local")
 
     properties.issuer.privateKey = encodedPem("PRIVATE KEY", secondKey.private.encoded)
-    properties.publicKeys = mapOf("first" to encodedPem("PUBLIC KEY", secondKey.public.encoded))
+    trustedIssuer.publicKey = encodedPem("PUBLIC KEY", secondKey.public.encoded)
 
     assertThat(resolver.privateKey().encoded).isEqualTo(secondKey.private.encoded)
-    assertThat(resolver.publicKey("first").encoded).isEqualTo(secondKey.public.encoded)
+    assertThat(resolver.publicKey("https://issuer.local").encoded).isEqualTo(secondKey.public.encoded)
     assertFailsWith<IllegalArgumentException> { resolver.publicKey("second") }
   }
 

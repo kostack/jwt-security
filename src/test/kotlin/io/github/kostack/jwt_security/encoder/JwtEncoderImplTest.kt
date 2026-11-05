@@ -32,15 +32,22 @@ class JwtEncoderImplTest {
     SecurityProperties(
       issuer =
         SecurityProperties.Issuer(
-          kid = "test-key",
-          name = "https://issuer.test",
+          kid = "https://issuer.test",
           audience = "test-api",
           privateKey = TestJwtKeys.properties.getValue("kostack-security.issuer.private-key") as String,
           expirationTime = 300
         ),
-      publicKeys =
-        mapOf("test-key" to TestJwtKeys.properties.getValue("kostack-security.public-keys.local") as String)
+      trustedIssuers =
+        mapOf(
+          "local" to
+            SecurityProperties.TrustedIssuer(
+              issuer = "https://issuer.test",
+              audience = "test-api",
+              publicKey = TestJwtKeys.properties.getValue("kostack-security.trusted-issuers.local.public-key") as String
+            )
+        )
     )
+  private val trustedIssuer get() = properties.trustedIssuers.getValue("local")
   private val resolver = JwtKeyResolver(properties)
   private val encoder = JwtEncoderImpl(resolver, properties, clock, RequiredJwtClaimsValidator(properties))
   private val user =
@@ -59,8 +66,8 @@ class JwtEncoderImplTest {
       val signed = SignedJWT.parse(encoder.encode(user, expiresAt = now.plusSeconds(300)))
 
       assertThat(signed.header.algorithm.name).isEqualTo(algorithm.name)
-      assertThat(signed.header.keyID).isEqualTo("test-key")
-      assertThat(signed.verify(RSASSAVerifier(resolver.publicKey("test-key")))).isTrue()
+      assertThat(signed.header.keyID).isEqualTo("https://issuer.test")
+      assertThat(signed.verify(RSASSAVerifier(resolver.publicKey("https://issuer.test")))).isTrue()
     }
 
   @Test
@@ -70,7 +77,7 @@ class JwtEncoderImplTest {
       val claims = SignedJWT.parse(token).jwtClaimsSet
 
       assertThat(claims.subject).isEqualTo(user.identity)
-      assertThat(claims.issuer).isEqualTo(properties.issuer.name)
+      assertThat(claims.issuer).isEqualTo(properties.issuer.kid)
       assertThat(claims.audience).containsExactly(properties.issuer.audience)
       assertThat(claims.issueTime.toInstant()).isEqualTo(now)
       assertThat(claims.notBeforeTime.toInstant()).isEqualTo(now.minusSeconds(1))
@@ -185,7 +192,7 @@ class JwtEncoderImplTest {
           ).jwtClaimsSet
 
       assertThat(claims.subject).isEqualTo(user.identity)
-      assertThat(claims.issuer).isEqualTo(properties.issuer.name)
+      assertThat(claims.issuer).isEqualTo(properties.issuer.kid)
       assertThat(claims.issueTime.toInstant()).isEqualTo(now)
       assertThat(claims.notBeforeTime.toInstant()).isEqualTo(now.minusSeconds(1))
       assertThat(claims.expirationTime.toInstant()).isEqualTo(now.plusSeconds(300))
@@ -196,13 +203,14 @@ class JwtEncoderImplTest {
   fun `decodes tokens signed with supported RSA algorithms`(algorithm: SignatureAlgorithm): Unit =
     runBlocking {
       properties.issuer.algorithmSignature = algorithm
+      trustedIssuer.algorithm = algorithm
       val token = encoder.encode(user, expiresAt = now.plusSeconds(300))
 
       val jwt = encoder.decode(token)
 
       assertThat(jwt.tokenValue).isEqualTo(token)
       assertThat(jwt.subject).isEqualTo(user.identity)
-      assertThat(jwt.headers["kid"]).isEqualTo("test-key")
+      assertThat(jwt.headers["kid"]).isEqualTo("https://issuer.test")
     }
 
   @Test
@@ -223,9 +231,8 @@ class JwtEncoderImplTest {
   @Test
   fun `resolves the verification key using the token key ID`(): Unit =
     runBlocking {
-      properties.publicKeys = properties.publicKeys + ("rotated-key" to properties.publicKeys.getValue("test-key"))
-
-      assertThat(encoder.decode(token(kid = "rotated-key")).subject).isEqualTo(user.identity)
+      assertThat(encoder.decode(token()).subject).isEqualTo(user.identity)
+      assertFailsWith<JwtException> { encoder.decode(token(kid = "different-key")) }
     }
 
   @Test
@@ -253,7 +260,7 @@ class JwtEncoderImplTest {
         Jwts
           .builder()
           .header()
-          .keyId("test-key")
+          .keyId("https://issuer.test")
           .and()
           .claims(validClaims())
           .signWith(otherKey, Jwts.SIG.RS256)
@@ -269,7 +276,7 @@ class JwtEncoderImplTest {
         Jwts
           .builder()
           .header()
-          .keyId("test-key")
+          .keyId("https://issuer.test")
           .and()
           .claims(validClaims())
           .signWith(
@@ -280,6 +287,47 @@ class JwtEncoderImplTest {
 
       assertFailsWith<JwtException> { encoder.decode(token) }
     }
+
+  @Test
+  fun `rejects an RSA algorithm different from the trusted issuer configuration`(): Unit =
+    runBlocking {
+      val token =
+        Jwts
+          .builder()
+          .header()
+          .keyId("https://issuer.test")
+          .and()
+          .claims(validClaims())
+          .signWith(resolver.privateKey(), Jwts.SIG.RS256)
+          .compact()
+      assertFailsWith<JwtException> { encoder.decode(token) }
+    }
+
+  @Test
+  fun `does not implicitly trust the signing issuer`(): Unit =
+    runBlocking {
+      val token = encoder.encode(user)
+      properties.trustedIssuers = emptyMap()
+      assertFailsWith<JwtException> { encoder.decode(token) }
+    }
+
+  @Test
+  fun `rejects ambiguous trusted issuer key sources`() {
+    trustedIssuer.jwkSetUri = "https://issuer.test/jwks"
+    assertFailsWith<IllegalArgumentException> { encoder.decoder() }
+  }
+
+  @Test
+  fun `rejects a trusted issuer without verification keys`() {
+    trustedIssuer.publicKey = ""
+    assertFailsWith<IllegalArgumentException> { encoder.decoder() }
+  }
+
+  @Test
+  fun `rejects duplicate trusted issuer names`() {
+    properties.trustedIssuers = properties.trustedIssuers + ("duplicate" to trustedIssuer.copy())
+    assertFailsWith<IllegalArgumentException> { encoder.decoder() }
+  }
 
   @Test
   fun `rejects unsigned tokens`(): Unit =
@@ -299,7 +347,7 @@ class JwtEncoderImplTest {
   @Test
   fun `rejects an incorrect issuer`(): Unit =
     runBlocking {
-      assertFailsWith<JwtValidationException> { encoder.decode(token(mapOf("iss" to "https://other.test"))) }
+      assertFailsWith<JwtException> { encoder.decode(token(mapOf("iss" to "https://other.test"))) }
     }
 
   @Test
@@ -363,7 +411,7 @@ class JwtEncoderImplTest {
   private fun validClaims(): Map<String, Any> =
     mapOf(
       "sub" to user.identity,
-      "iss" to properties.issuer.name,
+      "iss" to properties.issuer.kid,
       "aud" to listOf(properties.issuer.audience),
       "iat" to Date.from(now.minusSeconds(10)),
       "nbf" to Date.from(now.minusSeconds(1)),
@@ -373,7 +421,7 @@ class JwtEncoderImplTest {
 
   private fun token(
     overrides: Map<String, Any> = emptyMap(),
-    kid: String? = "test-key",
+    kid: String? = "https://issuer.test",
     omittedClaim: String? = null
   ): String =
     Jwts

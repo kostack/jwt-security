@@ -56,14 +56,17 @@ are not accepted. Surrounding whitespace on the outer Base64 value is trimmed.
 ```yaml
 kostack-security:
   issuer:
-    kid: local
-    name: https://issuer.example.com
+    kid: https://issuer.example.com
     audience: example-api
     private-key: ${JWT_PRIVATE_KEY_BASE64}
     algorithm-signature: RS512
     expiration-time: 3600
-  public-keys:
-    local: ${JWT_PUBLIC_KEY_BASE64}
+  trusted-issuers:
+    local:
+      issuer: https://issuer.example.com
+      audience: example-api
+      algorithm: RS512
+      public-key: ${JWT_PUBLIC_KEY_BASE64}
   authorities-claim: roles
   authority-prefix: ""
   authorization-header:
@@ -74,8 +77,12 @@ kostack-security:
     name: token
 ```
 
-The signing `kid` must match a key in `public-keys` when you decode your own tokens.
-The configured issuer name and audience are used for both issuance and validation.
+To decode your own tokens, explicitly trust the signing issuer under `trusted-issuers`.
+Its issuer, audience, and algorithm must match the signing configuration. For inline
+verification, the token's `kid` must equal the trusted `issuer` value, so configure the
+signing `issuer.kid` to match the trusted issuer value. It sets both `kid` and `iss`.
+Each trusted issuer accepts one inline `public-key`; it has no separate `kid` setting.
+The former `issuer.name` and `public-keys` settings are no longer supported.
 
 ### 3. Define your user and user provider
 
@@ -217,7 +224,7 @@ Token issuance uses:
 | Header `kid` | `issuer.kid` |
 | Header `alg` | `issuer.algorithm-signature` |
 | `sub` | `JwtUser.identity` |
-| `iss` | `issuer.name` |
+| `iss` | `issuer.kid` |
 | `aud` | Includes `issuer.audience` |
 | `iat` | Current injected clock time |
 | `nbf` | Current clock time minus one second |
@@ -227,8 +234,8 @@ Additional claims override entries returned by `user.claims()`.
 The encoder then sets the subject, issuer, and timestamps, overriding supplied values
 for those fields. It adds the configured audience to any supplied audiences.
 
-Decoding verifies the RSA signature and requires a known `kid`. The default setup
-also checks the configured issuer, expiration and not-before times, audience membership,
+Decoding verifies the signature using the trusted issuer's configured algorithm.
+Inline RSA keys require a known `kid`. The default setup also checks the trusted issuer, expiration and not-before times, audience membership,
 a nonblank subject, and the presence of the configured authorities claim and expiration.
 Timestamp checks use the injected clock with zero clock skew. An empty authorities list is
 accepted; the required-claims validator checks the claim's presence.
@@ -270,28 +277,69 @@ always checks the configured header. To replace extraction behavior, provide a
 
 ## Key IDs and rotation
 
-Configure multiple public keys under their exact JWT key IDs:
+Configure one inline public key per trusted issuer. The issuer value also serves as its key ID:
 
 ```yaml
 kostack-security:
   issuer:
-    kid: current
-    name: https://issuer.example.com
+    kid: https://issuer.example.com
     audience: example-api
     private-key: ${JWT_CURRENT_PRIVATE_KEY_BASE64}
-  public-keys:
-    current: ${JWT_CURRENT_PUBLIC_KEY_BASE64}
-    previous: ${JWT_PREVIOUS_PUBLIC_KEY_BASE64}
+  trusted-issuers:
+    local:
+      issuer: https://issuer.example.com
+      audience: example-api
+      algorithm: RS512
+      public-key: ${JWT_CURRENT_PUBLIC_KEY_BASE64}
 ```
 
-New tokens use `current`; tokens signed with `previous` remain verifiable while
-that public key is configured and the tokens satisfy the other validation rules.
-An absent or unknown `kid` is rejected.
+Inline verification requires `kid` and `iss` to equal the configured trusted issuer.
+Replacing the inline public key stops accepting tokens signed with the previous key.
+For rotation with overlapping keys, use a remote JWKS endpoint that publishes both
+keys during the transition. Remote JWKS verification uses the key IDs published by
+that endpoint; those IDs may differ from the issuer.
 
-Multiple keys do not enable multiple issuer names. The default decoder accepts only
-`issuer.name`. For multiple issuers, configure an application-specific
-`ReactiveAuthenticationManagerResolver<ServerWebExchange>` through
-`oauth2ResourceServer { it.authenticationManagerResolver(resolver) }`.
+Keys are scoped to their trusted issuer. Each issuer must configure exactly one
+source: one inline `public-key` or a remote `jwk-set-uri`.
+
+### Accepting multiple token issuers
+
+Configure each trusted issuer with its own JWKS URL, allowed algorithm, and expected audience:
+
+```yaml
+kostack-security:
+  trusted-issuers:
+    users:
+      issuer: https://users.example.com
+      jwk-set-uri: https://users.example.com/jwks
+      algorithm: RS512
+      audience: my-api
+    partners:
+      issuer: https://partners.example.com
+      jwk-set-uri: https://partners.example.com/jwks
+      algorithm: RS256
+      audience: partner-api
+```
+
+HTTP authentication and direct `JwtEncoder.decode()` calls use the same trusted-issuer
+configuration. The token's `iss` selects a configured decoder, which verifies its
+signature using the configured algorithm and validates issuer, timestamps, and claims.
+Only configured issuers are accepted; without a trust map all tokens are rejected.
+The local signing issuer is not implicitly trusted. Inline-key issuers and remote JWKS
+issuers can coexist in the map. Remote keys are fetched lazily and cached by Spring
+Security. Each issuer's algorithm defaults to `RS512`.
+
+A nonempty map also creates a `ReactiveAuthenticationManagerResolver<ServerWebExchange>`
+bean for applications using `oauth2ResourceServer { it.authenticationManagerResolver(resolver) }`.
+The fixture's `WebSecurityConfiguration` wires it automatically. The normal `jwt`
+configuration also supports multiple issuers through the default `ReactiveJwtDecoder`.
+The existing `JwtClaimsValidator` and `JwtAuthenticationConverter` beans are reused;
+default required-claim validation checks each issuer's audience and the shared
+authorities claim. Duplicate issuers, missing issuer or audience, and ambiguous or
+missing key sources fail at startup.
+
+Token issuance continues using `issuer.private-key` and the other signing settings.
+Applications can replace the decoder or resolver by supplying their own beans.
 
 ## Auto-configuration and customization
 
@@ -305,6 +353,7 @@ Each bean backs off when a matching bean already exists:
 | `JwtKeyResolver` | Keys from `SecurityProperties` |
 | `JwtEncoder` | `JwtEncoderImpl` |
 | `ReactiveJwtDecoder` | `JwtEncoder.decoder()` |
+| `ReactiveAuthenticationManagerResolver<ServerWebExchange>` | Per-issuer managers when `trusted-issuers` is nonempty |
 | `HeaderOrQueryTokenAuthenticationConverter` | Header and optional query extraction |
 | `JwtClaimsValidator` | `RequiredJwtClaimsValidator` |
 | `JwtAuthenticationTokenFactory` | `JwtUserAuthenticationTokenFactory` |
@@ -409,13 +458,17 @@ All properties use the `kostack-security` prefix.
 
 | Property | Default | Description |
 |---|---|---|
-| `issuer.kid` | `local` | Signing key ID in the JWT header |
-| `issuer.name` | `https://issuer.local` | Issuer used for signing and validation |
-| `issuer.audience` | `""` | Audience added on issuance and required on decoding |
+| `issuer.kid` | `local` | Signing key ID in the JWT header and issuer in the `iss` claim |
+| `issuer.audience` | `""` | Audience added on issuance; trusted issuers configure decoding audiences |
 | `issuer.private-key` | `""` | Base64-encoded PKCS#8 PEM private key |
 | `issuer.algorithm-signature` | `RS512` | Signing algorithm: RS256, RS384, or RS512 |
 | `issuer.expiration-time` | `3600` | Default token lifetime in seconds (`Long`) when `expiresAt` is omitted or null |
-| `public-keys` | `{local: ""}` | Key ID to Base64-encoded X.509 PEM public key |
+| `trusted-issuers` | `{}` | Named trusted issuers; a nonempty map enables the resolver bean |
+| `trusted-issuers.<name>.issuer` | `""` | Exact expected `iss` claim and inline key ID; required |
+| `trusted-issuers.<name>.jwk-set-uri` | `""` | Absolute HTTP(S) JWKS endpoint; alternative to inline keys |
+| `trusted-issuers.<name>.public-key` | `""` | One Base64-encoded X.509 PEM public key; alternative to JWKS |
+| `trusted-issuers.<name>.algorithm` | `RS512` | Allowed signature algorithm for this issuer |
+| `trusted-issuers.<name>.audience` | `""` | Expected audience for this issuer; required |
 | `authorities-claim` | `roles` | Claim used to extract granted authorities |
 | `authority-prefix` | `""` | Prefix added to each authority |
 | `authorization-header.enabled` | `true` | Currently unused by the default converter |

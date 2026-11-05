@@ -6,15 +6,22 @@ import org.springframework.security.oauth2.jose.jws.SignatureAlgorithm
 @ConfigurationProperties("kostack-security")
 data class SecurityProperties(
   var issuer: Issuer = Issuer(),
-  var publicKeys: Map<String, String> = mapOf("local" to ""),
   var authoritiesClaim: String = "roles",
   var authorityPrefix: String = "",
   var authorizationHeader: AuthorizationHeader = AuthorizationHeader(),
-  var queryParameter: QueryParameter = QueryParameter()
+  var queryParameter: QueryParameter = QueryParameter(),
+  var trustedIssuers: Map<String, TrustedIssuer> = emptyMap()
 ) {
+  data class TrustedIssuer(
+    var issuer: String = "",
+    var jwkSetUri: String = "",
+    var algorithm: SignatureAlgorithm = SignatureAlgorithm.RS512,
+    var audience: String = "",
+    var publicKey: String = ""
+  )
+
   data class Issuer(
     var kid: String = "local",
-    var name: String = "https://issuer.local",
     var audience: String = "",
     var privateKey: String = "",
     var algorithmSignature: SignatureAlgorithm = SignatureAlgorithm.RS512,

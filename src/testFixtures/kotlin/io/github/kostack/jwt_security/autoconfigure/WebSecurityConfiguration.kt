@@ -37,6 +37,8 @@ internal class WebSecurityConfiguration(
       .logout { it.disable() }
       .authorizeExchange {
         it
+          .pathMatchers("/.well-known/jwks.json")
+          .permitAll()
           .pathMatchers("/api/**")
           .authenticated()
           .anyExchange()
