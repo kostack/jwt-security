@@ -25,6 +25,11 @@ kostack-security:
       audience: kostack
       algorithm: RS512
       #public-key: generated and supplied by TestJwtKeys.properties at startup
+    remote:
+      issuer: user-service
+      audience: nds
+      algorithm: RS512
+      jwk-set-uri: http://localhost:8080/.well-known/jwks.json
   authorization-header:
     name: x-auth
     prefix: ""

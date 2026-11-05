@@ -8,6 +8,7 @@ import com.nimbusds.jose.proc.JWSVerificationKeySelector
 import com.nimbusds.jwt.SignedJWT
 import io.github.kostack.jwt_security.autoconfigure.SecurityProperties
 import io.github.kostack.jwt_security.service.JwtKeyResolver
+import org.slf4j.LoggerFactory
 import org.springframework.security.oauth2.jwt.BadJwtException
 import org.springframework.security.oauth2.jwt.Jwt
 import org.springframework.security.oauth2.jwt.JwtIssuerValidator
@@ -44,11 +45,13 @@ class TrustedIssuerJwtDecoder(
           require(uri.scheme in setOf("https", "http") && !uri.host.isNullOrBlank()) {
             "Trusted issuer '$name' must define an absolute HTTP(S) jwk-set-uri"
           }
+          log.debug("Configuring trusted issuer '$name' with jwk-set-uri: ${issuer.jwkSetUri}")
           NimbusReactiveJwtDecoder.withJwkSetUri(issuer.jwkSetUri).jwsAlgorithm(issuer.algorithm).build()
         } else {
           require(issuer.algorithm.name in setOf("RS256", "RS384", "RS512")) {
             "Trusted issuer '$name' with an inline public key must use RS256, RS384, or RS512"
           }
+          log.debug("Configuring trusted issuer '$name' with inline public key")
           NimbusReactiveJwtDecoder
             .withJwkSource { jwt ->
               Flux
@@ -90,7 +93,13 @@ class TrustedIssuerJwtDecoder(
         } catch (ex: Exception) {
           return@defer Mono.error(BadJwtException("Invalid JWT", ex))
         }
+
+      log.debug("Decoding JWT with issuer: $issuer")
       val decoder = decoders[issuer] ?: return@defer Mono.error(BadJwtException("Untrusted JWT issuer"))
       decoder.decode(token)
     }
+
+  companion object {
+    private val log = LoggerFactory.getLogger(TrustedIssuerJwtDecoder::class.java)
+  }
 }
