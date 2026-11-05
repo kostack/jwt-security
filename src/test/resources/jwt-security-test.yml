@@ -1,0 +1,12 @@
+kostack-security:
+  issuer:
+    kid: security-local.kostack.io
+    audience: kostack
+    expiration-time: 900
+    algorithm-signature: RS512
+  authorization-header:
+    name: x-auth
+    prefix: ""
+  query-parameter:
+    enabled: true
+    name: token

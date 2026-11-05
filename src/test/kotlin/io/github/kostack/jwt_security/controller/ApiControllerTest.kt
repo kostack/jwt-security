@@ -25,6 +25,7 @@ import java.time.Clock
   classes = [TestApplication::class],
   webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
   properties = [
+    "spring.config.name=jwt-security-test",
     "spring.shell.interactive.enabled=false"
   ]
 )

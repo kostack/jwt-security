@@ -1,19 +1,23 @@
 package io.github.kostack.jwt_security.autoconfigure
 
+import io.github.kostack.jwt_security.command.GenerateToken
 import io.github.kostack.jwt_security.converter.HeaderOrQueryTokenAuthenticationConverter
 import io.github.kostack.jwt_security.converter.JwtAuthenticationConverter
 import io.github.kostack.jwt_security.converter.JwtAuthenticationTokenFactory
 import io.github.kostack.jwt_security.converter.JwtUserAuthenticationTokenFactory
-import io.github.kostack.jwt_security.dto.JwtUser
 import io.github.kostack.jwt_security.encoder.JwtClaimsValidator
 import io.github.kostack.jwt_security.encoder.JwtEncoder
 import io.github.kostack.jwt_security.encoder.JwtEncoderImpl
 import io.github.kostack.jwt_security.encoder.RequiredJwtClaimsValidator
+import io.github.kostack.jwt_security.jwks.JwksService
+import io.github.kostack.jwt_security.jwks.JwksServiceImpl
 import io.github.kostack.jwt_security.service.AuthEntryPointJwt
 import io.github.kostack.jwt_security.service.JwtKeyResolver
 import io.github.kostack.jwt_security.service.TrustedIssuerAuthenticationManagerResolver
 import io.github.kostack.jwt_security.service.UserProvider
 import org.springframework.boot.autoconfigure.AutoConfiguration
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
+import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
@@ -23,6 +27,7 @@ import org.springframework.security.oauth2.jwt.ReactiveJwtDecoder
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter
 import org.springframework.security.oauth2.server.resource.authentication.ReactiveJwtAuthenticationConverter
 import org.springframework.security.oauth2.server.resource.authentication.ReactiveJwtGrantedAuthoritiesConverterAdapter
+import org.springframework.shell.core.command.Command
 import org.springframework.web.server.ServerWebExchange
 import java.time.Clock
 
@@ -43,12 +48,28 @@ class SecurityAutoConfiguration {
 
   @Bean
   @ConditionalOnMissingBean
+  fun jwksService(
+    properties: SecurityProperties,
+    keyResolver: JwtKeyResolver
+  ): JwksService = JwksServiceImpl(properties, keyResolver)
+
+  @Bean
+  @ConditionalOnMissingBean
   fun jwtEncoder(
     keyResolver: JwtKeyResolver,
     properties: SecurityProperties,
     clock: Clock,
     claimsValidator: JwtClaimsValidator
   ): JwtEncoder = JwtEncoderImpl(keyResolver, properties, clock, claimsValidator)
+
+  @Bean
+  @ConditionalOnClass(Command::class)
+  @ConditionalOnBean(UserProvider::class)
+  @ConditionalOnMissingBean
+  fun generateToken(
+    userProvider: UserProvider,
+    jwtEncoder: JwtEncoder
+  ): GenerateToken = GenerateToken(userProvider, jwtEncoder)
 
   @Bean
   @ConditionalOnMissingBean
@@ -61,6 +82,7 @@ class SecurityAutoConfiguration {
   fun jwtClaimsValidator(properties: SecurityProperties): JwtClaimsValidator = RequiredJwtClaimsValidator(properties)
 
   @Bean
+  @ConditionalOnBean(UserProvider::class)
   @ConditionalOnMissingBean
   fun jwtAuthenticationTokenFactory(userProvider: UserProvider): JwtAuthenticationTokenFactory =
     JwtUserAuthenticationTokenFactory(userProvider)
@@ -100,16 +122,4 @@ class SecurityAutoConfiguration {
     converter: JwtAuthenticationConverter
   ): ReactiveAuthenticationManagerResolver<ServerWebExchange> =
     TrustedIssuerAuthenticationManagerResolver(properties, decoder, converter)
-
-  @Bean
-  @ConditionalOnMissingBean
-  fun userProvider(): UserProvider =
-    object : UserProvider {
-      override suspend fun load(
-        identity: String,
-        claims: Map<String, Any>
-      ): JwtUser? {
-        TODO("Not yet implemented")
-      }
-    }
 }

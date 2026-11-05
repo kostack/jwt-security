@@ -7,9 +7,7 @@ import kotlinx.coroutines.runBlocking
 import org.springframework.security.core.userdetails.UsernameNotFoundException
 import org.springframework.shell.core.command.annotation.Command
 import org.springframework.shell.core.command.annotation.Option
-import org.springframework.stereotype.Component
 
-@Component
 class GenerateToken(
   private val userProvider: UserProvider,
   private val jwtEncoder: JwtEncoder

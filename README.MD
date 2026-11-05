@@ -351,7 +351,9 @@ Each bean backs off when a matching bean already exists:
 | `Clock` | `Clock.systemUTC()` |
 | `AuthEntryPointJwt` | JSON unauthorized responses |
 | `JwtKeyResolver` | Keys from `SecurityProperties` |
+| `JwksService` | `JwksServiceImpl`, exporting configured inline public keys |
 | `JwtEncoder` | `JwtEncoderImpl` |
+| `GenerateToken` | Shell command when Spring Shell and a `UserProvider` bean are available |
 | `ReactiveJwtDecoder` | `JwtEncoder.decoder()` |
 | `ReactiveAuthenticationManagerResolver<ServerWebExchange>` | Per-issuer managers when `trusted-issuers` is nonempty |
 | `HeaderOrQueryTokenAuthenticationConverter` | Header and optional query extraction |
@@ -359,7 +361,11 @@ Each bean backs off when a matching bean already exists:
 | `JwtAuthenticationTokenFactory` | `JwtUserAuthenticationTokenFactory` |
 | `ReactiveJwtAuthenticationConverter` | Authorities claim and prefix from properties |
 | `JwtAuthenticationConverter` | Delegates authority conversion, then invokes the token factory |
-| `UserProvider` | Unimplemented placeholder; supply your own |
+
+No default `UserProvider` is registered. Supply one for the default user-loading
+token factory and the token-generation command. Applications that replace user
+loading with a custom `JwtAuthenticationTokenFactory` can omit `UserProvider`;
+the default token-generation command will then be unavailable.
 
 To extend required-claim validation, preserve the default checks when providing your own
 `JwtClaimsValidator`. For example:
@@ -399,18 +405,11 @@ can replace user loading and the resulting authentication type.
 
 ## Spring Shell
 
-The library includes `GenerateToken`, a `@Component` with a Spring Shell `@Command`. Import it explicitly
-when your application's component scan does not include the library package:
-
-```kotlin
-import io.github.kostack.jwt_security.command.GenerateToken
-import org.springframework.context.annotation.Configuration
-import org.springframework.context.annotation.Import
-
-@Configuration
-@Import(GenerateToken::class)
-class TokenShellConfiguration
-```
+`SecurityAutoConfiguration` registers `GenerateToken` as a bean containing the Spring
+Shell `@Command` when Spring Shell is present and a `UserProvider` bean is configured.
+No component scanning or explicit import is required. It uses the
+configured `UserProvider` and `JwtEncoder` beans and backs off when an application
+supplies its own `GenerateToken` bean.
 
 In a running application with an interactive Spring Shell:
 
@@ -495,6 +494,20 @@ Use a Java 25 toolchain.
   Report generation is separate from `check`.
 
 Run `./gradlew spotlessApply` to format Kotlin sources and Gradle scripts.
+
+The fixture application's `application.yml` shows a local inline-key issuer and an
+example remote issuer. `TestApplication.main` supplies temporary local keys through
+`TestJwtKeys.properties` as Spring default properties. YAML, environment variables,
+and command-line arguments override matching defaults; issuer map entries with
+different names are merged. Configure the remote entry for your server or remove it
+when only local tokens are needed.
+
+Integration tests load `src/test/resources/jwt-security-test.yml` using
+`spring.config.name=jwt-security-test`, so edits to the fixture application's YAML
+do not change their trusted issuers. `ApiControllerTest` supplies generated local
+keys through `@DynamicPropertySource`; `MultiIssuerApiControllerTest` supplies two
+remote issuers backed by an HTTP server on a random loopback port. Tests do not
+require the example JWKS server on port 8080.
 
 ## License
 
