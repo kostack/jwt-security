@@ -147,9 +147,7 @@ tasks.named<JacocoCoverageVerification>("jacocoTestCoverageVerification") {
 }
 
 tasks.named("check") {
-  dependsOn(tasks.named("jacocoTestCoverageVerification"))
-  dependsOn(tasks.named("spotlessCheck"))
-  dependsOn(tasks.named("test"))
+  dependsOn("spotlessCheck", "jacocoTestReport", "jacocoTestCoverageVerification")
 }
 
 tasks.named("bootJar") {

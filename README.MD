@@ -8,7 +8,9 @@ A Kotlin library for RSA-signed JWTs and reactive Spring Security authentication
 - Coroutine APIs for encoding and decoding, plus a reactive JWT decoder.
 - Header and optional query-parameter token extraction.
 - Application-defined user loading and authentication principals.
-- Public-key selection by JWT `kid`, including multiple keys for rotation.
+- Issuer-scoped verification with inline RSA keys or remote JWKS for key rotation.
+- Public JWKS export for configured inline RSA keys.
+- Typed helpers for reading required and optional claims.
 - Replaceable claims validation, authentication conversion, and clock.
 - A Spring Shell command for generating tokens.
 
@@ -125,9 +127,8 @@ class AppUserProvider : UserProvider {
 ```
 
 During HTTP authentication, `load` receives the validated JWT's subject and claims.
-Returning `null` rejects authentication. The default provider contains an
-unimplemented placeholder, so applications using the default authentication flow
-must supply their own provider.
+Returning `null` rejects authentication. No default `UserProvider` is registered,
+so applications using the default authentication flow must supply their own provider.
 
 The resulting authentication is a `UsernamePasswordAuthenticationToken` with the loaded
 user as its principal and null credentials. Its authorities come from the JWT's configured
@@ -240,6 +241,25 @@ a nonblank subject, and the presence of the configured authorities claim and exp
 Timestamp checks use the injected clock with zero clock skew. An empty authorities list is
 accepted; the required-claims validator checks the claim's presence.
 
+### Reading typed claims
+
+Use the extensions on `Map<String, Any>` when reading claims in a user provider
+or from a decoded JWT:
+
+```kotlin
+import io.github.kostack.jwt_security.extensions.getClaim
+import io.github.kostack.jwt_security.extensions.getClaimOrNull
+
+val jwt = encoder.decode(token)
+val tenant = jwt.claims.getClaim<String>("tenant")
+val displayName = jwt.claims.getClaimOrNull<String>("display_name")
+```
+
+`getClaim<T>` throws `IllegalArgumentException` when the claim is absent or its
+value has the wrong type. `getClaimOrNull<T>` returns `null` for an absent claim
+and throws for a type mismatch. Neither helper converts values; generic collection
+element types are not checked at runtime.
+
 ## Token extraction
 
 The default request format is:
@@ -341,6 +361,40 @@ missing key sources fail at startup.
 Token issuance continues using `issuer.private-key` and the other signing settings.
 Applications can replace the decoder or resolver by supplying their own beans.
 
+### Publishing a JWKS endpoint
+
+Inject `JwksService` to expose configured inline public keys to other services:
+
+```kotlin
+import io.github.kostack.jwt_security.jwks.JwksService
+import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.RestController
+
+@RestController
+class JwksController(private val jwksService: JwksService) {
+    @GetMapping("/.well-known/jwks.json")
+    fun publicKeys(): Map<String, Any> = jwksService.publicKeys()
+}
+```
+
+Allow unauthenticated access to this endpoint in your application's security chain,
+before `.anyExchange().authenticated()`:
+
+```kotlin
+it.pathMatchers("/.well-known/jwks.json").permitAll()
+```
+
+The library registers the service; your application supplies the controller and
+access rule. The fixture application includes both.
+
+The response contains a `keys` array with one RSA JWK per trusted issuer that has
+an inline `public-key`. Each key includes `kid` equal to that issuer's `issuer`
+value, `use: sig`, its configured `alg`, and the public RSA modulus and exponent.
+Private key material is excluded. Remote JWKS entries are omitted, and no inline
+keys produces an empty `keys` array. The signing private key alone does not add
+a public key to the response; configure its corresponding inline trusted issuer
+as shown in the quick start.
+
 ## Auto-configuration and customization
 
 Spring Boot discovers `SecurityAutoConfiguration` through its auto-configuration imports.
@@ -358,7 +412,7 @@ Each bean backs off when a matching bean already exists:
 | `ReactiveAuthenticationManagerResolver<ServerWebExchange>` | Per-issuer managers when `trusted-issuers` is nonempty |
 | `HeaderOrQueryTokenAuthenticationConverter` | Header and optional query extraction |
 | `JwtClaimsValidator` | `RequiredJwtClaimsValidator` |
-| `JwtAuthenticationTokenFactory` | `JwtUserAuthenticationTokenFactory` |
+| `JwtAuthenticationTokenFactory` | `JwtUserAuthenticationTokenFactory` when a `UserProvider` bean is available |
 | `ReactiveJwtAuthenticationConverter` | Authorities claim and prefix from properties |
 | `JwtAuthenticationConverter` | Delegates authority conversion, then invokes the token factory |
 
@@ -505,9 +559,10 @@ when only local tokens are needed.
 Integration tests load `src/test/resources/jwt-security-test.yml` using
 `spring.config.name=jwt-security-test`, so edits to the fixture application's YAML
 do not change their trusted issuers. `ApiControllerTest` supplies generated local
-keys through `@DynamicPropertySource`; `MultiIssuerApiControllerTest` supplies two
-remote issuers backed by an HTTP server on a random loopback port. Tests do not
-require the example JWKS server on port 8080.
+keys through `@DynamicPropertySource`. Tests do not require the example JWKS
+server on port 8080. `JwksServiceImplTest` covers public-key export and signature
+verification, and `JwksAutoConfigurationTest` checks default registration and
+replacement with an application-provided service.
 
 ## License
 
