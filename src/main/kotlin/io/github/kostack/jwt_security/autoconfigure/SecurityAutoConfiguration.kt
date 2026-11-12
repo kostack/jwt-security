@@ -22,12 +22,12 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Conditional
+import org.springframework.context.annotation.Configuration
 import org.springframework.security.authentication.ReactiveAuthenticationManagerResolver
 import org.springframework.security.oauth2.jwt.ReactiveJwtDecoder
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter
 import org.springframework.security.oauth2.server.resource.authentication.ReactiveJwtAuthenticationConverter
 import org.springframework.security.oauth2.server.resource.authentication.ReactiveJwtGrantedAuthoritiesConverterAdapter
-import org.springframework.shell.core.command.Command
 import org.springframework.web.server.ServerWebExchange
 import java.time.Clock
 
@@ -61,15 +61,6 @@ class SecurityAutoConfiguration {
     clock: Clock,
     claimsValidator: JwtClaimsValidator
   ): JwtEncoder = JwtEncoderImpl(keyResolver, properties, clock, claimsValidator)
-
-  @Bean
-  @ConditionalOnClass(Command::class)
-  @ConditionalOnBean(UserProvider::class)
-  @ConditionalOnMissingBean
-  fun generateToken(
-    userProvider: UserProvider,
-    jwtEncoder: JwtEncoder
-  ): GenerateToken = GenerateToken(userProvider, jwtEncoder)
 
   @Bean
   @ConditionalOnMissingBean
@@ -122,4 +113,16 @@ class SecurityAutoConfiguration {
     converter: JwtAuthenticationConverter
   ): ReactiveAuthenticationManagerResolver<ServerWebExchange> =
     TrustedIssuerAuthenticationManagerResolver(properties, decoder, converter)
+
+  @Configuration(proxyBeanMethods = false)
+  @ConditionalOnClass(name = ["org.springframework.shell.core.command.Command"])
+  class ShellConfiguration {
+    @Bean
+    @ConditionalOnBean(UserProvider::class)
+    @ConditionalOnMissingBean
+    fun generateToken(
+      userProvider: UserProvider,
+      jwtEncoder: JwtEncoder
+    ): GenerateToken = GenerateToken(userProvider, jwtEncoder)
+  }
 }

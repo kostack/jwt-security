@@ -3,7 +3,6 @@ HELP.md
 .gradle-local
 .codex
 .agents
-gradle.properties
 build/
 !gradle/wrapper/gradle-wrapper.jar
 !**/src/main/**/build/

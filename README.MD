@@ -16,9 +16,9 @@ A Kotlin library for RSA-signed JWTs and reactive Spring Security authentication
 
 ## Installation
 
-The project builds and tests with Java 25, Kotlin 2.3.0, and Spring Boot 4.1.0.
+The project builds and tests with Java 25, Kotlin 2.4.21, and Spring Boot 4.1.2.
 
-Declare the library and Spring Boot starters in your application:
+Declare the library and the dependencies it expects the application to provide:
 
 ```kotlin
 dependencies {
@@ -27,12 +27,23 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-security")
     implementation("org.springframework.boot:spring-boot-starter-security-oauth2-resource-server")
     implementation("org.springframework.boot:spring-boot-starter-oauth2-client")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactor")
+    implementation("org.jetbrains.kotlin:kotlin-reflect")
+
+    // Optional: only needed for the security:generate-token shell command.
+    implementation("org.springframework.shell:spring-shell-starter-jni")
 }
 ```
 
-The four Spring Boot starters are compile-only dependencies of the main library.
-Applications supply them and manage their versions through Spring Boot dependency management.
-Spring Shell remains a runtime dependency of the library.
+The Spring Boot starters, Kotlin coroutines, `kotlin-reflect`, and Spring Shell are
+compile-only dependencies of the library and are not published with it. Applications
+supply them and manage their versions through the Spring Boot BOM (and the Spring Shell
+BOM when using the shell command). Without Spring Shell on the classpath, the token
+command is simply not registered.
+
+The library itself publishes only `jjwt-api` (API), plus `jjwt-impl`, `jjwt-jackson`,
+`kotlinx-serialization-json`, and `ascii-table` at runtime, each with an explicit version.
 
 ## Quick start
 
@@ -325,6 +336,88 @@ that endpoint; those IDs may differ from the issuer.
 Keys are scoped to their trusted issuer. Each issuer must configure exactly one
 source: one inline `public-key` or a remote `jwk-set-uri`.
 
+### Trusting a remote issuer (JWKS)
+
+To accept tokens signed by another service or identity provider, configure a trusted
+issuer with a `jwk-set-uri` instead of a `public-key`. The library downloads that
+issuer's public keys from the endpoint; no key material is configured locally.
+
+```yaml
+kostack-security:
+  trusted-issuers:
+    users:
+      issuer: https://users.example.com          # must equal the token's `iss` exactly
+      jwk-set-uri: https://users.example.com/.well-known/jwks.json
+      algorithm: RS256                           # the only algorithm accepted from this issuer
+      audience: my-api                           # the token's `aud` must contain this value
+      clock-skew: 60s                            # optional, default 60s
+```
+
+Requirements, checked at startup:
+
+- `issuer` and `audience` are required.
+- `jwk-set-uri` must be an absolute `http` or `https` URL with a host. Use `https`
+  outside local development.
+- An issuer configures either `jwk-set-uri` or `public-key`, never both.
+- `algorithm` may be any RSA, ECDSA, or RSA-PSS algorithm that the endpoint's keys
+  support (the inline `public-key` option is limited to RS256, RS384, and RS512).
+
+How verification works:
+
+1. The token's `iss` selects the issuer's decoder; unknown issuers are rejected.
+2. The token's `kid` header selects the key from the downloaded JWK set, so the remote
+   issuer must sign with a `kid` that its JWKS publishes. Tokens signed with any
+   algorithm other than the configured `algorithm` are rejected.
+3. The JWK set is fetched on the first token from that issuer, not at startup, and is
+   cached by Spring Security. When a token's `kid` is not in the cached set, the set is
+   fetched again, so key rotation on the remote side needs no restart here.
+4. The token is then validated like any other: issuer, `exp`/`nbf` within `clock-skew`,
+   audience, a nonblank `sub`, and the presence of the `authorities-claim`.
+
+If the endpoint is unreachable or returns no matching key, authentication fails with
+401 for that request; startup is not affected.
+
+> **Note:** The default `JwtClaimsValidator` requires the `authorities-claim`
+> (`roles` by default) on tokens from **every** issuer. Tokens from identity providers
+> that do not emit that claim are rejected. Either have the provider include it, or
+> supply your own `JwtClaimsValidator` bean (see
+> [Auto-configuration and customization](#auto-configuration-and-customization)).
+
+#### Example: trusting another service that uses this library
+
+Service A signs tokens and publishes its keys through the
+[JWKS endpoint](#publishing-a-jwks-endpoint):
+
+```yaml
+# Service A
+kostack-security:
+  issuer:
+    kid: https://service-a.example.com
+    audience: service-b
+    private-key: ${JWT_PRIVATE_KEY_BASE64}
+  trusted-issuers:
+    self:
+      issuer: https://service-a.example.com
+      audience: service-b
+      public-key: ${JWT_PUBLIC_KEY_BASE64}   # exported at /.well-known/jwks.json
+```
+
+Service B accepts those tokens without holding any of A's keys:
+
+```yaml
+# Service B
+kostack-security:
+  trusted-issuers:
+    service-a:
+      issuer: https://service-a.example.com
+      audience: service-b
+      jwk-set-uri: https://service-a.example.com/.well-known/jwks.json
+```
+
+This works because tokens signed by this library carry `kid` = `issuer.kid`, and the
+exported JWKS lists each inline key under `kid` = its trusted `issuer`. Keep the
+`algorithm` (default `RS512`) the same on both sides.
+
 ### Accepting multiple token issuers
 
 Configure each trusted issuer with its own JWKS URL, allowed algorithm, and expected audience:
@@ -463,7 +556,7 @@ can replace user loading and the resulting authentication type.
 ## Spring Shell
 
 `SecurityAutoConfiguration` registers `GenerateToken` as a bean containing the Spring
-Shell `@Command` when Spring Shell is present and a `UserProvider` bean is configured.
+Shell `@Command` when the application includes Spring Shell and a `UserProvider` bean is configured.
 No component scanning or explicit import is required. It uses the
 configured `UserProvider` and `JwtEncoder` beans and backs off when an application
 supplies its own `GenerateToken` bean.
@@ -520,14 +613,15 @@ All properties use the `kostack-security` prefix.
 | `issuer.algorithm-signature` | `RS512` | Signing algorithm: RS256, RS384, or RS512 |
 | `issuer.expiration-time` | `3600` | Default token lifetime in seconds (`Long`) when `expiresAt` is omitted or null |
 | `trusted-issuers` | `{}` | Named trusted issuers; a nonempty map enables the resolver bean |
-| `trusted-issuers.<name>.issuer` | `""` | Exact expected `iss` claim and inline key ID; required |
+| `trusted-issuers.<name>.issuer` | `""` | Exact expected `iss` claim; selects the inline key; required |
 | `trusted-issuers.<name>.jwk-set-uri` | `""` | Absolute HTTP(S) JWKS endpoint; alternative to inline keys |
 | `trusted-issuers.<name>.public-key` | `""` | One Base64-encoded X.509 PEM public key; alternative to JWKS |
 | `trusted-issuers.<name>.algorithm` | `RS512` | Allowed signature algorithm for this issuer |
 | `trusted-issuers.<name>.audience` | `""` | Expected audience for this issuer; required |
+| `trusted-issuers.<name>.clock-skew` | `60s` | Tolerance for `exp` and `nbf` checks; `0s` for exact expiry |
 | `authorities-claim` | `roles` | Claim used to extract granted authorities |
 | `authority-prefix` | `""` | Prefix added to each authority |
-| `authorization-header.enabled` | `true` | Currently unused by the default converter |
+| `authorization-header.enabled` | `true` | Enables header token extraction; `false` ignores the header |
 | `authorization-header.name` | `Authorization` | Header containing the token |
 | `authorization-header.prefix` | `Bearer` | Header scheme; empty string accepts a raw token |
 | `query-parameter.enabled` | `false` | Enables query-parameter token extraction |
@@ -546,11 +640,17 @@ Use a Java 25 toolchain.
 - `test` runs the JUnit tests.
 - `check` runs tests, Spotless formatting checks, and JaCoCo coverage verification.
   It fails when overall instruction coverage is below **80%**.
-- `jacocoTestReport` depends on `test` and generates HTML at
+- `jacocoTestReport` runs automatically after `test` and generates HTML at
   `build/jacocoHtml/index.html` and XML at `build/jacocoReport.xml`.
-  Report generation is separate from `check`.
 
 Run `./gradlew spotlessApply` to format Kotlin sources and Gradle scripts.
+`test` and `assemble` install `scripts/pre-commit` as the Git pre-commit hook
+(if none exists), which runs the Spotless check before each commit.
+
+Plugin versions for Kotlin are set once via `kotlinVersion` in `gradle.properties`.
+Spring Boot and Spring Shell versions are managed by BOMs that apply only to compile-only,
+test, and fixture dependencies, so they never appear in the published POM. The test
+fixtures are not published.
 
 The fixture application's `application.yml` shows a local inline-key issuer and an
 example remote issuer. `TestApplication.main` supplies temporary local keys through

@@ -1,24 +1,23 @@
-import org.gradle.testing.jacoco.tasks.JacocoCoverageVerification
-import org.gradle.testing.jacoco.tasks.JacocoReport
-
 plugins {
-  kotlin("jvm") version "2.3.0"
-  kotlin("kapt") version "2.3.0"
-  kotlin("plugin.spring") version "2.3.0"
-  kotlin("plugin.serialization") version "2.3.0"
-  id("org.springframework.boot") version "4.1.0"
-  id("io.spring.dependency-management") version "1.1.7"
+  kotlin("jvm")
+  kotlin("kapt")
+  kotlin("plugin.spring")
+  kotlin("plugin.serialization")
   id("com.vanniktech.maven.publish") version "0.33.0"
   id("java-test-fixtures")
-  id("com.diffplug.spotless") version "8.4.0"
+  id("com.diffplug.spotless") version "8.11.0"
   jacoco
 }
 
+val springBootVersion = "4.1.2"
+val springShellVersion = "4.0.3"
+val jjwtVersion = "0.13.0"
+val kotlinxSerializationVersion = "1.11.0"
+val packageId = "jwt-security"
+val packageName = "JWT Security"
 group = "io.github.kostack"
 version = providers.gradleProperty("projectVersion").getOrElse("1.0.0")
 description = "JWT Security"
-
-val springShellVersion = "4.0.3"
 
 java {
   toolchain {
@@ -30,56 +29,51 @@ repositories {
   mavenCentral()
 }
 
-dependencyManagement {
-  imports {
-    mavenBom(org.springframework.boot.gradle.plugin.SpringBootPlugin.BOM_COORDINATES)
-    mavenBom("org.springframework.shell:spring-shell-dependencies:$springShellVersion")
-  }
-}
-
 dependencies {
+  // Build and tests only: the BOMs manage the unversioned dependencies below and are not published.
+  listOf(
+    platform("org.springframework.boot:spring-boot-dependencies:$springBootVersion"),
+    platform("org.springframework.shell:spring-shell-dependencies:$springShellVersion")
+  ).forEach {
+    kapt(it)
+    compileOnly(it)
+    testImplementation(it)
+    testFixturesImplementation(it)
+  }
+
+  // Generates configuration metadata for @ConfigurationProperties.
   kapt("org.springframework.boot:spring-boot-configuration-processor")
 
-  // Kotlin
-  implementation(kotlin("reflect"))
-  implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core")
-  implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactor")
-  implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
-
-  // Applications supply their own Spring Boot starters.
+  // Provided by the consuming application; not published as dependencies.
   listOf(
     "org.springframework.boot:spring-boot-starter-webflux",
     "org.springframework.boot:spring-boot-starter-security",
     "org.springframework.boot:spring-boot-starter-security-oauth2-resource-server",
-    "org.springframework.boot:spring-boot-starter-oauth2-client"
+    "org.springframework.boot:spring-boot-starter-oauth2-client",
+    "org.springframework.shell:spring-shell-starter-jni",
+    "org.jetbrains.kotlinx:kotlinx-coroutines-core",
+    "org.jetbrains.kotlinx:kotlinx-coroutines-reactor",
+    "org.jetbrains.kotlin:kotlin-reflect"
   ).forEach {
     compileOnly(it)
     testImplementation(it)
     testFixturesImplementation(it)
   }
 
+  // Published dependencies: versions are explicit because the BOMs are not published.
+  api("io.jsonwebtoken:jjwt-api:$jjwtVersion")
+  runtimeOnly("io.jsonwebtoken:jjwt-impl:$jjwtVersion")
+  runtimeOnly("io.jsonwebtoken:jjwt-jackson:$jjwtVersion")
+  implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:$kotlinxSerializationVersion")
   implementation("com.github.freva:ascii-table:1.12.1")
 
-  // JWT related
-  api("io.jsonwebtoken:jjwt-api:0.13.0")
-  runtimeOnly("io.jsonwebtoken:jjwt-impl:0.13.0")
-  runtimeOnly("io.jsonwebtoken:jjwt-jackson:0.13.0")
-
-  // Shell
-  implementation("org.springframework.shell:spring-shell-starter-jni")
-
   testImplementation("org.springframework.boot:spring-boot-starter-test")
-  testRuntimeOnly("org.junit.platform:junit-platform-launcher")
-  testImplementation("com.ninja-squad:springmockk:5.0.1")
-  testImplementation("io.mockk:mockk:1.14.11")
   testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test")
+  testImplementation("io.mockk:mockk:1.14.11")
   testImplementation(kotlin("test"))
+  testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 
-  testFixturesImplementation(kotlin("stdlib"))
-  testFixturesImplementation("org.springframework.shell:spring-shell-core-autoconfigure")
-  testFixturesImplementation("org.springframework.shell:spring-shell-jline")
-  testFixturesImplementation("org.springframework.boot:spring-boot-autoconfigure")
-  testFixturesImplementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
+  testFixturesImplementation("org.jetbrains.kotlinx:kotlinx-serialization-json:$kotlinxSerializationVersion")
 }
 
 kotlin {
@@ -88,8 +82,16 @@ kotlin {
   }
 }
 
-tasks.withType<Test> {
-  useJUnitPlatform()
+// Test fixtures are for this project's tests only; don't publish them.
+(components["java"] as AdhocComponentWithVariants).apply {
+  withVariantsFromConfiguration(configurations["testFixturesApiElements"]) { skip() }
+  withVariantsFromConfiguration(configurations["testFixturesRuntimeElements"]) { skip() }
+}
+// The publish plugin adds the fixtures' sources variant late, so skip it after evaluation.
+afterEvaluate {
+  configurations.findByName("testFixturesSourcesElements")?.let {
+    (components["java"] as AdhocComponentWithVariants).withVariantsFromConfiguration(it) { skip() }
+  }
 }
 
 val installGitHook =
@@ -98,11 +100,7 @@ val installGitHook =
     description = "Installs a git pre-commit hook to enforce formatting rules"
     doLast {
       val hookSource = file("scripts/pre-commit")
-      val hooksDir = file(".git/hooks")
-      val hookTarget = hooksDir.resolve("pre-commit")
-      check(hookSource.isFile) { "Git hook source not found: ${hookSource.path}" }
-      check(hooksDir.isDirectory) { "Git hooks directory not found: ${hooksDir.path}" }
-
+      val hookTarget = file(".git/hooks/pre-commit")
       if (!hookTarget.exists()) {
         hookSource.copyTo(hookTarget, overwrite = false)
       }
@@ -110,33 +108,39 @@ val installGitHook =
     }
   }
 
-tasks.named<Test>("test") {
+tasks.assemble {
+  dependsOn(installGitHook)
+}
+
+tasks.test {
   useJUnitPlatform()
-  reports.junitXml.required.set(true)
+  dependsOn(installGitHook)
+  finalizedBy(tasks.jacocoTestReport)
+  jvmArgs(
+    // Needed by MockK's inline mocking agent on recent JDKs.
+    "-XX:+EnableDynamicAgentLoading",
+    // Disables class data sharing, which warns when an agent appends to the bootstrap classpath.
+    "-Xshare:off",
+    // Lets Netty and Spring Shell's JNI terminal load native libraries without restricted-method warnings.
+    "--enable-native-access=ALL-UNNAMED"
+  )
 
   testLogging {
     events("passed", "skipped", "failed")
-    showStandardStreams = true
   }
-  jvmArgs("-XX:+EnableDynamicAgentLoading", "-Xshare:off", "--enable-native-access=ALL-UNNAMED")
 }
 
-tasks.named<JacocoReport>("jacocoTestReport") {
-  dependsOn(tasks.named("test"))
-
+tasks.jacocoTestReport {
   reports {
-    xml.required.set(true)
-    html.required.set(true)
-    csv.required.set(false)
+    xml.required = true
+    html.required = true
+    csv.required = false
+    html.outputLocation = layout.buildDirectory.dir("jacocoHtml")
+    xml.outputLocation = layout.buildDirectory.file("jacocoReport.xml")
   }
-
-  reports.html.outputLocation.set(layout.buildDirectory.dir("jacocoHtml"))
-  reports.xml.outputLocation.set(layout.buildDirectory.file("jacocoReport.xml"))
 }
 
-tasks.named<JacocoCoverageVerification>("jacocoTestCoverageVerification") {
-  dependsOn(tasks.named("test"))
-
+tasks.jacocoTestCoverageVerification {
   violationRules {
     rule {
       limit {
@@ -146,16 +150,8 @@ tasks.named<JacocoCoverageVerification>("jacocoTestCoverageVerification") {
   }
 }
 
-tasks.named("check") {
-  dependsOn("spotlessCheck", "jacocoTestReport", "jacocoTestCoverageVerification")
-}
-
-tasks.named("bootJar") {
-  enabled = false
-}
-
-tasks.named("jar") {
-  enabled = true
+tasks.check {
+  dependsOn(tasks.jacocoTestCoverageVerification)
 }
 
 spotless {
@@ -175,34 +171,34 @@ mavenPublishing {
 
   coordinates(
     groupId = group.toString(),
-    artifactId = "jwt-security",
+    artifactId = packageId,
     version = version.toString()
   )
 
   pom {
-    name.set("JWT Security")
-    description.set(project.description)
-    url.set("https://github.com/kostack/jwt-security")
+    name = packageName
+    description = project.description
+    url = "https://github.com/kostack/$packageId"
 
     licenses {
       license {
-        name.set("MIT License")
-        url.set("https://opensource.org/licenses/MIT")
+        name = "MIT License"
+        url = "https://opensource.org/licenses/MIT"
       }
     }
 
     developers {
       developer {
-        id.set("zender")
-        name.set("Nikolay Georgiev")
-        url.set("https://github.com/zender")
+        id = "zender"
+        name = "Nikolay Georgiev"
+        url = "https://github.com/zender"
       }
     }
 
     scm {
-      connection.set("scm:git:git://github.com/kostack/jwt-security.git")
-      developerConnection.set("scm:git:ssh://github.com/kostack/jwt-security.git")
-      url.set("https://github.com/kostack/jwt-security")
+      connection = "scm:git:git://github.com/kostack/$packageId.git"
+      developerConnection = "scm:git:ssh://github.com/kostack/$packageId.git"
+      url = "https://github.com/kostack/$packageId"
     }
   }
 }
