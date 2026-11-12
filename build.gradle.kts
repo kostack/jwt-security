@@ -61,9 +61,6 @@ dependencies {
   }
 
   // Published dependencies: versions are explicit because the BOMs are not published.
-  api("io.jsonwebtoken:jjwt-api:$jjwtVersion")
-  runtimeOnly("io.jsonwebtoken:jjwt-impl:$jjwtVersion")
-  runtimeOnly("io.jsonwebtoken:jjwt-jackson:$jjwtVersion")
   implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:$kotlinxSerializationVersion")
   implementation("com.github.freva:ascii-table:1.12.1")
 
@@ -71,6 +68,10 @@ dependencies {
   testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test")
   testImplementation("io.mockk:mockk:1.14.11")
   testImplementation(kotlin("test"))
+  // Builds independent test tokens (foreign keys, HMAC, unsigned) to exercise the decoder.
+  testImplementation("io.jsonwebtoken:jjwt-api:$jjwtVersion")
+  testRuntimeOnly("io.jsonwebtoken:jjwt-impl:$jjwtVersion")
+  testRuntimeOnly("io.jsonwebtoken:jjwt-jackson:$jjwtVersion")
   testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 
   testFixturesImplementation("org.jetbrains.kotlinx:kotlinx-serialization-json:$kotlinxSerializationVersion")

@@ -1,10 +1,14 @@
 package io.github.kostack.jwt_security.encoder
 
+import com.nimbusds.jose.JOSEObjectType
+import com.nimbusds.jose.JWSAlgorithm
+import com.nimbusds.jose.JWSHeader
+import com.nimbusds.jose.crypto.RSASSASigner
+import com.nimbusds.jwt.JWTClaimsSet
+import com.nimbusds.jwt.SignedJWT
 import io.github.kostack.jwt_security.autoconfigure.SecurityProperties
 import io.github.kostack.jwt_security.dto.JwtUser
 import io.github.kostack.jwt_security.service.JwtKeyResolver
-import io.jsonwebtoken.Jwts
-import io.jsonwebtoken.security.SignatureAlgorithm
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.reactor.awaitSingle
 import kotlinx.coroutines.withContext
@@ -24,12 +28,12 @@ class JwtEncoderImpl(
     signingAlgorithm()
   }
 
-  private fun signingAlgorithm(): SignatureAlgorithm {
+  private fun signingAlgorithm(): JWSAlgorithm {
     val name = properties.issuer.algorithmSignature.name
     check(name in RSA_ALGORITHMS) {
       "Issuer algorithm-signature must be one of $RSA_ALGORITHMS for an RSA private key, but was $name"
     }
-    return Jwts.SIG.get().forKey(name) as SignatureAlgorithm
+    return JWSAlgorithm.parse(name)
   }
 
   override suspend fun encode(
@@ -39,35 +43,48 @@ class JwtEncoderImpl(
   ): String =
     withContext(Dispatchers.IO) {
       val now = clock.instant()
-      val privateKey = keyResolver.privateKey()
-      val algorithm = signingAlgorithm()
-      return@withContext Jwts
-        .builder()
-        .header()
-        .keyId(properties.issuer.kid)
-        .and()
-        .claims(user.claims() + additionalClaims)
-        .subject(user.identity)
-        .issuer(properties.issuer.kid)
-        .audience()
-        .add(properties.issuer.audience)
-        .and()
-        .issuedAt(Date.from(now))
-        .notBefore(Date.from(now.minusSeconds(1)))
-        .expiration(Date.from(expiresAt ?: now.plusSeconds(properties.issuer.expirationTime)))
-        .signWith(privateKey, algorithm)
-        .compact()
+      val supplied = user.claims() + additionalClaims
+      val header =
+        JWSHeader
+          .Builder(signingAlgorithm())
+          .keyID(properties.issuer.kid)
+          .type(JOSEObjectType.JWT)
+          .build()
+      val claims =
+        JWTClaimsSet
+          .Builder()
+          .apply { supplied.forEach { (name, value) -> claim(name, value) } }
+          .subject(user.identity)
+          .issuer(properties.issuer.kid)
+          .audience(audience(supplied[AUDIENCE]))
+          .issueTime(Date.from(now))
+          .notBeforeTime(Date.from(now.minusSeconds(1)))
+          .expirationTime(Date.from(expiresAt ?: now.plusSeconds(properties.issuer.expirationTime)))
+          .build()
+      SignedJWT(header, claims)
+        .apply { sign(RSASSASigner(keyResolver.privateKey())) }
+        .serialize()
     }
 
+  private fun audience(supplied: Any?): List<String> =
+    when (supplied) {
+      is String -> listOf(supplied)
+      is Collection<*> -> supplied.filterNotNull().map { it.toString() }
+      else -> emptyList()
+    }.plus(properties.issuer.audience)
+      .filter { it.isNotBlank() }
+      .distinct()
+
   override suspend fun decode(token: String): Jwt = decoder().decode(token).awaitSingle()
+
+  override fun decoder(): ReactiveJwtDecoder = jwtDecoder
 
   private val jwtDecoder: ReactiveJwtDecoder by lazy {
     TrustedIssuerJwtDecoder(properties, keyResolver, clock, claimsValidator)
   }
 
-  override fun decoder(): ReactiveJwtDecoder = jwtDecoder
-
   private companion object {
+    const val AUDIENCE = "aud"
     val RSA_ALGORITHMS = setOf("RS256", "RS384", "RS512")
   }
 }

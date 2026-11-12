@@ -166,6 +166,26 @@ class JwtEncoderImplTest {
     }
 
   @Test
+  fun `adds the configured audience to supplied audiences`(): Unit =
+    runBlocking {
+      val fromList = SignedJWT.parse(encoder.encode(user, mapOf("aud" to listOf("other-api", "test-api"))))
+      val fromString = SignedJWT.parse(encoder.encode(user, mapOf("aud" to "other-api")))
+
+      assertThat(fromList.jwtClaimsSet.audience).containsExactly("other-api", "test-api")
+      assertThat(fromString.jwtClaimsSet.audience).containsExactly("other-api", "test-api")
+    }
+
+  @Test
+  fun `marks the token type as JWT`(): Unit =
+    runBlocking {
+      assertThat(
+        SignedJWT
+          .parse(encoder.encode(user))
+          .header.type.type
+      ).isEqualTo("JWT")
+    }
+
+  @Test
   fun `additional claims override user claims`(): Unit =
     runBlocking {
       val token =

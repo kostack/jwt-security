@@ -42,8 +42,9 @@ supply them and manage their versions through the Spring Boot BOM (and the Sprin
 BOM when using the shell command). Without Spring Shell on the classpath, the token
 command is simply not registered.
 
-The library itself publishes only `jjwt-api` (API), plus `jjwt-impl`, `jjwt-jackson`,
-`kotlinx-serialization-json`, and `ascii-table` at runtime, each with an explicit version.
+The library itself publishes only `kotlinx-serialization-json` and `ascii-table` as runtime
+dependencies, each with an explicit version. Signing and verification both use Nimbus
+JOSE + JWT, which the Spring Security resource-server starter already provides.
 
 ## Quick start
 
@@ -242,6 +243,9 @@ Token issuance uses:
 | `iat` | Current injected clock time |
 | `nbf` | Current clock time minus one second |
 | `exp` | Absolute `expiresAt`, or current injected clock time plus `issuer.expiration-time` seconds when omitted or null |
+
+Tokens carry a `typ: JWT` header. Claim values must be JSON-compatible: strings,
+numbers, booleans, `Date` (written as epoch seconds), and lists or maps of those.
 
 Additional claims override entries returned by `user.claims()`.
 The encoder then sets the subject, issuer, and timestamps, overriding supplied values
