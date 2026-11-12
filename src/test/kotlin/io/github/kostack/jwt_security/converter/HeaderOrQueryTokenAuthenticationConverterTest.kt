@@ -83,6 +83,20 @@ class HeaderOrQueryTokenAuthenticationConverterTest {
   }
 
   @Test
+  fun `ignores the header when header extraction is disabled`() {
+    val properties = queryProperties().apply { authorizationHeader.enabled = false }
+    val request =
+      MockServerHttpRequest
+        .get("/api")
+        .header("Authorization", "Bearer header-token")
+        .queryParam("token", "query-token")
+
+    assertToken(convert(request, properties), "query-token")
+    assertThat(convert(MockServerHttpRequest.get("/api").header("Authorization", "Bearer header-token"), properties))
+      .isNull()
+  }
+
+  @Test
   fun `extracts a query token when enabled`() {
     val request = MockServerHttpRequest.get("/api").queryParam("token", "query-token")
 

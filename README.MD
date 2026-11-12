@@ -69,9 +69,11 @@ kostack-security:
       audience: example-api
       algorithm: RS512
       public-key: ${JWT_PUBLIC_KEY_BASE64}
+      clock-skew: 60s
   authorities-claim: roles
   authority-prefix: ""
   authorization-header:
+    enabled: true
     name: Authorization
     prefix: Bearer
   query-parameter:
@@ -80,9 +82,8 @@ kostack-security:
 ```
 
 To decode your own tokens, explicitly trust the signing issuer under `trusted-issuers`.
-Its issuer, audience, and algorithm must match the signing configuration. For inline
-verification, the token's `kid` must equal the trusted `issuer` value, so configure the
-signing `issuer.kid` to match the trusted issuer value. It sets both `kid` and `iss`.
+Its issuer, audience, and algorithm must match the signing configuration. The signing
+`issuer.kid` sets both `kid` and `iss`, so it must equal the trusted `issuer` value.
 Each trusted issuer accepts one inline `public-key`; it has no separate `kid` setting.
 The former `issuer.name` and `public-keys` settings are no longer supported.
 
@@ -236,9 +237,10 @@ The encoder then sets the subject, issuer, and timestamps, overriding supplied v
 for those fields. It adds the configured audience to any supplied audiences.
 
 Decoding verifies the signature using the trusted issuer's configured algorithm.
-Inline RSA keys require a known `kid`. The default setup also checks the trusted issuer, expiration and not-before times, audience membership,
+Inline RSA keys are selected by the token's `iss`; the `kid` header is not required. The default setup also checks the trusted issuer, expiration and not-before times, audience membership,
 a nonblank subject, and the presence of the configured authorities claim and expiration.
-Timestamp checks use the injected clock with zero clock skew. An empty authorities list is
+Timestamp checks use the injected clock with the trusted issuer's `clock-skew`
+(default `60s`; set `0s` for exact expiry). An empty authorities list is
 accepted; the required-claims validator checks the claim's presence.
 
 ### Reading typed claims
@@ -291,13 +293,14 @@ When the header is absent or uses an unrelated scheme, extraction can fall back 
 query parameter. A malformed matching header fails authentication instead of falling back.
 Header prefixes are trimmed in configuration and matched without regard to case.
 
-The `authorization-header.enabled` property currently has no effect: the converter
-always checks the configured header. To replace extraction behavior, provide a
+Set `authorization-header.enabled: false` to ignore the header entirely, for example to
+accept query-parameter tokens only. To replace extraction behavior, provide a
 `HeaderOrQueryTokenAuthenticationConverter` subclass bean and override `convert`.
 
 ## Key IDs and rotation
 
-Configure one inline public key per trusted issuer. The issuer value also serves as its key ID:
+Configure one inline public key per trusted issuer. Keys are selected by issuer; the
+issuer value is also used as the `kid` for tokens this library signs and in the JWKS response:
 
 ```yaml
 kostack-security:
@@ -313,7 +316,7 @@ kostack-security:
       public-key: ${JWT_CURRENT_PUBLIC_KEY_BASE64}
 ```
 
-Inline verification requires `kid` and `iss` to equal the configured trusted issuer.
+Inline verification selects the key by `iss` and ignores the token's `kid`.
 Replacing the inline public key stops accepting tokens signed with the previous key.
 For rotation with overlapping keys, use a remote JWKS endpoint that publishes both
 keys during the transition. Remote JWKS verification uses the key IDs published by

@@ -11,6 +11,7 @@ import reactor.core.publisher.Mono
 open class HeaderOrQueryTokenAuthenticationConverter(
   properties: SecurityProperties
 ) : ServerAuthenticationConverter {
+  private val headerEnabled = properties.authorizationHeader.enabled
   private val headerName = properties.authorizationHeader.name
   private val prefix = properties.authorizationHeader.prefix.trim()
   private val queryParameter = properties.queryParameter
@@ -33,6 +34,7 @@ open class HeaderOrQueryTokenAuthenticationConverter(
       )
 
   private fun convertHeader(exchange: ServerWebExchange): Mono<Authentication> {
+    if (!headerEnabled) return Mono.empty()
     val value = exchange.request.headers.getFirst(headerName) ?: return Mono.empty()
     val normalized =
       if (prefix.isEmpty()) {

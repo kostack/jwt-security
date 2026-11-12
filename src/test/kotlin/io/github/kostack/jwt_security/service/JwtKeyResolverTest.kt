@@ -43,12 +43,12 @@ class JwtKeyResolverTest {
   fun `selects the single RSA public key for each issuer`() {
     assertThat(resolver.publicKey("https://issuer.local").encoded).isEqualTo(firstKey.public.encoded)
     assertThat(
-      resolver.publicKey("https://second.test", "https://second.test").encoded
+      resolver.publicKey("https://second.test").encoded
     ).isEqualTo(secondKey.public.encoded)
   }
 
   @Test
-  fun `rejects a key ID belonging to another issuer`() {
+  fun `selects keys by issuer only`() {
     properties.trustedIssuers = properties.trustedIssuers + (
       "other" to
         SecurityProperties.TrustedIssuer(
@@ -57,10 +57,9 @@ class JwtKeyResolverTest {
         )
     )
     assertThat(resolver.publicKey("https://issuer.local").encoded).isEqualTo(firstKey.public.encoded)
-    assertThat(resolver.publicKey("https://other.test", "https://other.test").encoded)
+    assertThat(resolver.publicKey("https://other.test").encoded)
       .isEqualTo(secondKey.public.encoded)
-    assertFailsWith<IllegalArgumentException> { resolver.publicKey("https://issuer.local", "https://other.test") }
-    assertFailsWith<IllegalArgumentException> { resolver.publicKey("https://issuer.local", "https://unknown.test") }
+    assertFailsWith<IllegalArgumentException> { resolver.publicKey("https://unknown.test") }
   }
 
   @Test
@@ -74,10 +73,10 @@ class JwtKeyResolverTest {
 
   @ParameterizedTest
   @ValueSource(strings = ["unknown", "", "HTTPS://ISSUER.LOCAL", " https://issuer.local "])
-  fun `rejects a key ID without an exact configured match`(kid: String) {
-    val failure = assertFailsWith<IllegalArgumentException> { resolver.publicKey(kid) }
+  fun `rejects an issuer without an exact configured match`(issuer: String) {
+    val failure = assertFailsWith<IllegalArgumentException> { resolver.publicKey(issuer) }
 
-    assertThat(failure.message).isEqualTo("No public key found: $kid")
+    assertThat(failure.message).isEqualTo("No public key found: $issuer")
   }
 
   @Test
@@ -107,7 +106,7 @@ class JwtKeyResolverTest {
 
     assertFailsWith<IllegalArgumentException> { resolver.publicKey("https://issuer.local") }
     assertThat(
-      resolver.publicKey("https://second.test", "https://second.test").encoded
+      resolver.publicKey("https://second.test").encoded
     ).isEqualTo(secondKey.public.encoded)
   }
 

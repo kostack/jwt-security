@@ -15,7 +15,7 @@ internal class JwksServiceImpl(
     JWKSet(
       properties.trustedIssuers.values.filter { it.publicKey.isNotBlank() }.map { issuer ->
         RSAKey
-          .Builder(keyResolver.publicKey(issuer.issuer, issuer.issuer))
+          .Builder(keyResolver.publicKey(issuer.issuer))
           .keyID(issuer.issuer)
           .keyUse(KeyUse.SIGNATURE)
           .algorithm(JWSAlgorithm.parse(issuer.algorithm.name))

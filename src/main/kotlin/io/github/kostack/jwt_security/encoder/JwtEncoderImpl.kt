@@ -20,6 +20,18 @@ class JwtEncoderImpl(
   private val clock: Clock,
   private val claimsValidator: JwtClaimsValidator
 ) : JwtEncoder {
+  init {
+    signingAlgorithm()
+  }
+
+  private fun signingAlgorithm(): SignatureAlgorithm {
+    val name = properties.issuer.algorithmSignature.name
+    check(name in RSA_ALGORITHMS) {
+      "Issuer algorithm-signature must be one of $RSA_ALGORITHMS for an RSA private key, but was $name"
+    }
+    return Jwts.SIG.get().forKey(name) as SignatureAlgorithm
+  }
+
   override suspend fun encode(
     user: JwtUser,
     additionalClaims: Map<String, Any>,
@@ -28,7 +40,7 @@ class JwtEncoderImpl(
     withContext(Dispatchers.IO) {
       val now = clock.instant()
       val privateKey = keyResolver.privateKey()
-      val algorithm = Jwts.SIG.get().forKey(properties.issuer.algorithmSignature.name) as SignatureAlgorithm
+      val algorithm = signingAlgorithm()
       return@withContext Jwts
         .builder()
         .header()
@@ -54,4 +66,8 @@ class JwtEncoderImpl(
   }
 
   override fun decoder(): ReactiveJwtDecoder = jwtDecoder
+
+  private companion object {
+    val RSA_ALGORITHMS = setOf("RS256", "RS384", "RS512")
+  }
 }

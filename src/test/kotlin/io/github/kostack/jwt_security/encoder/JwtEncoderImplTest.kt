@@ -20,6 +20,7 @@ import org.springframework.security.oauth2.jwt.JwtException
 import org.springframework.security.oauth2.jwt.JwtValidationException
 import java.security.KeyPairGenerator
 import java.time.Clock
+import java.time.Duration
 import java.time.Instant
 import java.time.ZoneOffset
 import java.util.Date
@@ -151,6 +152,7 @@ class JwtEncoderImplTest {
   @Test
   fun `rejects an encoded token after its absolute expiry`(): Unit =
     runBlocking {
+      trustedIssuer.clockSkew = Duration.ZERO
       val token = encoder.encode(user, expiresAt = now.plusSeconds(60))
       val laterEncoder =
         JwtEncoderImpl(
@@ -229,23 +231,21 @@ class JwtEncoderImplTest {
     }
 
   @Test
-  fun `resolves the verification key using the token key ID`(): Unit =
+  fun `verifies with the issuer's inline key regardless of the token key ID`(): Unit =
     runBlocking {
       assertThat(encoder.decode(token()).subject).isEqualTo(user.identity)
-      assertFailsWith<JwtException> { encoder.decode(token(kid = "different-key")) }
+      assertThat(encoder.decode(token(kid = "rotated-key-id")).subject).isEqualTo(user.identity)
+      assertThat(encoder.decode(token(kid = null)).subject).isEqualTo(user.identity)
     }
 
   @Test
-  fun `rejects a token without a key ID`(): Unit =
-    runBlocking {
-      assertFailsWith<JwtException> { encoder.decode(token(kid = null)) }
-    }
+  fun `rejects an unrecognised signing algorithm at construction`() {
+    properties.issuer.algorithmSignature = SignatureAlgorithm.ES256
 
-  @Test
-  fun `rejects a token with an unknown key ID`(): Unit =
-    runBlocking {
-      assertFailsWith<JwtException> { encoder.decode(token(kid = "unknown")) }
+    assertFailsWith<IllegalStateException> {
+      JwtEncoderImpl(resolver, properties, clock, RequiredJwtClaimsValidator(properties))
     }
+  }
 
   @Test
   fun `rejects a signature from another RSA key`(): Unit =
@@ -351,8 +351,24 @@ class JwtEncoderImplTest {
     }
 
   @Test
+  fun `accepts tokens expired within the default clock skew`(): Unit =
+    runBlocking {
+      val jwt =
+        encoder.decode(
+          token(
+            mapOf(
+              "iat" to Date.from(now.minusSeconds(120)),
+              "exp" to Date.from(now.minusSeconds(30))
+            )
+          )
+        )
+      assertThat(jwt.subject).isEqualTo(user.identity)
+    }
+
+  @Test
   fun `rejects tokens expired by one second without clock skew`(): Unit =
     runBlocking {
+      trustedIssuer.clockSkew = Duration.ZERO
       assertFailsWith<JwtValidationException> {
         encoder.decode(token(mapOf("iat" to Date.from(now.minusSeconds(60)), "exp" to Date.from(now.minusSeconds(1)))))
       }
@@ -361,6 +377,7 @@ class JwtEncoderImplTest {
   @Test
   fun `rejects tokens that become valid one second in the future without clock skew`(): Unit =
     runBlocking {
+      trustedIssuer.clockSkew = Duration.ZERO
       assertFailsWith<JwtValidationException> { encoder.decode(token(mapOf("nbf" to Date.from(now.plusSeconds(1))))) }
     }
 

@@ -20,7 +20,6 @@ import reactor.core.publisher.Flux
 import reactor.core.publisher.Mono
 import java.net.URI
 import java.time.Clock
-import java.time.Duration
 
 class TrustedIssuerJwtDecoder(
   properties: SecurityProperties,
@@ -56,15 +55,17 @@ class TrustedIssuerJwtDecoder(
             .withJwkSource { jwt ->
               Flux
                 .defer<JWK> {
-                  val kid = jwt.header.keyID ?: return@defer Flux.empty()
                   Flux.just(
                     RSAKey
-                      .Builder(keyResolver.publicKey(kid, issuer.issuer))
-                      .keyID(kid)
+                      .Builder(keyResolver.publicKey(issuer.issuer))
+                      .keyID(jwt.header.keyID)
                       .algorithm(JWSAlgorithm.parse(issuer.algorithm.name))
                       .build()
                   )
-                }.onErrorResume(IllegalArgumentException::class.java) { Flux.empty() }
+                }.onErrorResume { ex ->
+                  log.warn("Unable to load inline public key for trusted issuer '{}'", name, ex)
+                  Flux.empty()
+                }
             }.jwtProcessorCustomizer { processor ->
               processor.jwsKeySelector =
                 JWSVerificationKeySelector(
@@ -76,7 +77,7 @@ class TrustedIssuerJwtDecoder(
       decoder.setJwtValidator(
         JwtValidators.createDefaultWithValidators(
           JwtIssuerValidator(issuer.issuer),
-          JwtTimestampValidator(Duration.ZERO).apply { setClock(clock) },
+          JwtTimestampValidator(issuer.clockSkew).apply { setClock(clock) },
           claimsValidator
         )
       )

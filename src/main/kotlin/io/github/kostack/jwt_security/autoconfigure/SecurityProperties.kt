@@ -2,6 +2,7 @@ package io.github.kostack.jwt_security.autoconfigure
 
 import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.security.oauth2.jose.jws.SignatureAlgorithm
+import java.time.Duration
 
 @ConfigurationProperties("kostack-security")
 data class SecurityProperties(
@@ -17,7 +18,8 @@ data class SecurityProperties(
     var jwkSetUri: String = "",
     var algorithm: SignatureAlgorithm = SignatureAlgorithm.RS512,
     var audience: String = "",
-    var publicKey: String = ""
+    var publicKey: String = "",
+    var clockSkew: Duration = Duration.ofSeconds(60)
   )
 
   data class Issuer(
